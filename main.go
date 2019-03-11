@@ -21,7 +21,7 @@ func writer() *tabwriter.Writer {
 func main() {
 	stringReader := strings.NewReader("Hello, world!\n")
 	scanner := scan.NewScanner("<string>", stringReader)
-	token := scan.Token{Type: scan.Symbol}
+	token := scan.Token{Type: scan.Error}
 	w := writer()
 	for i := 1; token.Type != scan.EOF; i++ {
 		token = scanner.Next()

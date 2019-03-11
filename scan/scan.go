@@ -29,6 +29,9 @@ const (
 	EOF   Type = iota // zero value so closed channel delivers EOF
 	Error             // error occurred; value is text of error
 
+	Punctuator // ( ) { } [ ] ? . , : ; ~ * /
+	Identifier // alphanumeric identifier
+
 	// Scheme tokens
 	LeftParen       // '('
 	LeftBrack       // '['
@@ -44,7 +47,6 @@ const (
 	Fixnum          // a number with no fractional component
 	Flonum          // a number with a fractional component
 	String          // quoted string (includes quotes)
-	Symbol          // a Scheme symbol
 	RightParen      // ')'
 	RightBrack      // ']'
 	RightBrace      // '}'
@@ -54,7 +56,6 @@ const (
 	Assign         // '='
 	Char           // printable ASCII character; grab bag for comma etc.
 	GreaterOrEqual // '>='
-	Identifier     // alphanumeric identifier
 	Number         // simple number
 	Operator       // known operator
 	Op             // "op", operator definition keyword
@@ -206,17 +207,17 @@ func (l *Scanner) acceptRun(valid string) {
 	l.backup()
 }
 
-// acceptIsRun consumes a run of runes from the valid set.
-func (l *Scanner) acceptIsRun(isValid func(rune) bool) {
-	for isValid(l.next()) {
+// acceptRunOf consumes a run of runes from the valid set.
+func (l *Scanner) acceptRunOf(isAcceptable func(rune) bool) {
+	for isAcceptable(l.next()) {
 	}
 	l.backup()
 }
 
-// acceptLimitedIsRun consumes a run of up to maxCount runes from the valid set, but will not
-// accept more than maxCount of input.
-func (l *Scanner) acceptLimitedIsRun(isValid func(rune) bool, maxCount int64) {
-	for isValid(l.next()) && maxCount > 0 {
+// acceptLimitedRunOf consumes a run of up to maxCount runes from the valid set,
+// but will not accept more than maxCount of input.
+func (l *Scanner) acceptLimitedRunOf(isAcceptable func(rune) bool, maxCount int64) {
+	for isAcceptable(l.next()) && maxCount > 0 {
 		maxCount -= 1
 	}
 	l.backup()
@@ -224,7 +225,7 @@ func (l *Scanner) acceptLimitedIsRun(isValid func(rune) bool, maxCount int64) {
 
 // isLineSeparator reports whether the argument is a line separator.
 // If r is '\r' and l.peek() is '\n', consumes the '\n' and returns true.
-// Otherwise, returns true iff r is a line terminator.
+// Otherwise, returns true iff r is a Unicode line terminator.
 //
 // These are the Unicode line terminators, according to Wikipedia's [Newline
 // article](https://en.wikipedia.org/wiki/Newline#Unicode):
@@ -306,18 +307,9 @@ func (l *Scanner) Peek() (result Token) {
 
 // state functions
 
-// lexLineComment scans a ;-to-eol comment.
-// The `;` comment marker has been consumed.
-//
-// From https://docs.racket-lang.org/reference/reader.html#%28part._parse-comment%29:
-//   A ; starts a line comment. When the reader encounters ;, it skips past all
-//   characters until the next linefeed (ASCII 10), carriage return (ASCII 13),
-//   next-line (Unicode 133), line-separator (Unicode 8232), or
-//   paragraph-separator (Unicode 8233) character.
-//
-//   A #| starts a nestable block comment. When the reader encounters #|, it
-//   skips past all characters until a closing |#. Pairs of matching #| and |#
-//   can be nested.
+// lexLineComment scans a //-to-eol comment.
+// The `//` comment marker has been consumed.
+// The eol is either "\r\n" or a Unicode Line Terminator (see isLineSeparator).
 //
 // TODO: pass comments to parser?
 func lexLineComment(l *Scanner) stateFn {
@@ -359,7 +351,6 @@ func lexBlockComment(l *Scanner) stateFn {
 // lexAny scans non-space items.
 func lexAny(l *Scanner) stateFn {
 	//	fmt.Printf("lexAny\n")//DEBUG
-	// Delimiters: whitespace ( ) [ ] { } " , ' ` ; # | \
 	switch r := l.next(); {
 	case r == eof:
 		return nil
@@ -370,6 +361,19 @@ func lexAny(l *Scanner) stateFn {
 	case unicode.IsSpace(r):
 		return lexSpace
 
+	case isAlphabetic(r):
+		return lexName
+	case isDigit(r):
+		return lexNumber
+
+	case r == '/':
+		if l.peek() == '/' {
+			l.next()
+			return lexLineComment
+		} else {
+			l.emit(Punctuator)
+		}
+		return lexAny
 	case r == '(':
 		l.emit(LeftParen)
 		return lexAny
@@ -391,11 +395,7 @@ func lexAny(l *Scanner) stateFn {
 	case r == '"':
 		return lexString
 	case r == '.':
-		if l.isDelimiter(l.peek()) {
-			l.emit(Dot)
-			return lexAny
-		}
-		return lexSymbol
+		l.emit(Dot)
 	case r == ',':
 		if l.peek() == '@' {
 			l.next()
@@ -410,16 +410,9 @@ func lexAny(l *Scanner) stateFn {
 	case r == '`':
 		l.emit(QuasiQuote)
 		return lexAny
-	case r == ';':
-		return lexLineComment
-	case r == '#':
-		return lexPoundSign
-	case r == '|':
-		return lexBarSymbol
-	default:
-		//  \, or anything else not listed above
-		return lexSymbol
 	}
+	//   anything else not listed above
+	return lexAny
 }
 
 // lexSpace scans a run of space characters.
@@ -437,74 +430,53 @@ func lexSpace(l *Scanner) stateFn {
 	return lexAny
 }
 
-func lexPoundSign(l *Scanner) stateFn {
-	//	fmt.Printf("lexPoundSign\n")//DEBUG
-	r := l.next()
-	switch r {
-	case '%':
-		return lexSymbol
-	case '|':
-		return lexBlockComment
-	case '\\':
-		return lexChar
-	case 't', 'f':
-		if l.isDelimiter(l.peek()) {
-			if r == 'f' {
-				l.emit(False)
-			} else {
-				l.emit(True)
-			}
-			return lexAny
-		}
+// lexName scans an identifier. The leading letter has already been consumed.
+//
+// An identifier is composed of a leading alphabetic character, followed by
+// zero or more alphanumeric characters.
+//
+// Inspired by Perl 6, the definitions of "alphabetic" and "alphanumeric"
+// include appropriate Unicode characters.  Specifically:
+// - Alphabetic characters are (1) the underscore (`_`), and (2) any character
+//   with the Unicode General Category value `Letter (L)`.
+// - Alphanumeric characters include all alphabetic characters, plus characters
+//   with the Unicode General Category value `Number, Decimal Digit (Nd)`.
+//
+// For Perl6 details, see
+// https://docs.perl6.org/language/syntax#Ordinary_identifiers and
+// https://stackoverflow.com/questions/34689850/whats-allowed-in-a-perl-6-identifier#answer-34693397
+func lexName(l *Scanner) stateFn {
+	//	fmt.Printf("lexName\n")//DEBUG
+	for isAlphanumeric(l.peek()) {
 		l.next()
-		return l.error("bad # syntax")
 	}
-	return l.errorf("bad character following #: %#U", r)
+	l.emit(Identifier)
+	return lexAny
 }
 
-// lexSymbol scans a Scheme symbol
-//
-// This uses the definition from Racket.
-// Quoting from https://docs.racket-lang.org/guide/symbols.html:
-//    For reader input, any character can appear directly in an identifier,
-//    except for whitespace and the following special characters:
-//
-//    ( ) [ ] { } " , ' ` ; # | \
-//
-//    isDelimiter(r) returns true if r is whitespace or any of those special
-//    characters.
-//
-//    Actually, # is disallowed only at the beginning of a symbol, and then only
-//    if not followed by %; otherwise, # is allowed, too. Also, . by itself is
-//    not a symbol.
-//
-//    Whitespace or special characters can be included in an identifier by
-//    quoting them with | or \. These quoting mechanisms are used in the printed
-//    form of identifiers that contain special characters or that might
-//    otherwise look like numbers.
-func lexSymbol(l *Scanner) stateFn {
-	//	fmt.Printf("lexSymbol\n")//DEBUG
-Loop:
-	for {
-		switch r := l.next(); {
-		case r == eof:
-			break Loop
-		case r == '\\':
-			r = l.next()
-			if r == eof {
-				return l.error("eof after \\ in symbol")
-			}
-		case r == '#':
-			// allowed in the middle of a symbol
-		case r == '|':
-			return lexBarSymbol
-		case l.isDelimiter(r):
-			l.backup()
-			break Loop
-		}
-	}
+func isAlphabetic(r rune) bool {
+	return r == '_' || unicode.IsLetter(r)
+}
 
-	// If the symbol looks like a number, it is a number.
+func isDigit(r rune) bool {
+	return unicode.IsDigit(r)
+}
+
+func isAlphanumeric(r rune) bool {
+	return isAlphabetic(r) || isDigit(r)
+}
+
+// lexNumber scans a number. The leading digit has already been consumed.
+func lexNumber(l *Scanner) stateFn {
+	//	fmt.Printf("lexNumber\n")//DEBUG
+	l.acceptRunOf(isDigit)
+	if r := l.peek(); r != '.' {
+		l.emit(Fixnum)
+		return lexAny
+	}
+	for isDigit(l.peek()) {
+		l.next()
+	}
 	text := l.tokenText()
 	_, err := strconv.ParseInt(text, 0, 64)
 	if err == nil {
@@ -515,28 +487,10 @@ Loop:
 		l.emit(Flonum)
 	} else if err.(*strconv.NumError).Err == strconv.ErrRange {
 		return l.error("Bignums not yet implemented")
-	} else if err.(*strconv.NumError).Err == strconv.ErrSyntax {
-		l.emit(Symbol)
 	} else {
 		panic(fmt.Sprintf("unexpected strconv error on %q: %v", text, err))
 	}
 	return lexAny
-}
-
-func lexBarSymbol(l *Scanner) stateFn {
-	//	fmt.Printf("lexBarSymbol\n")//DEBUG
-	for r := l.next(); r != eof && r != '|'; r = l.next() {
-	}
-	return lexSymbol
-}
-
-// isDelimiter reports whether the argument is a delimiter character.
-// Along with whitespace, the following characters are delimiters:
-//    ( ) [ ] { } " , ' ` ; # | \
-func (l *Scanner) isDelimiter(r rune) bool {
-	return unicode.IsSpace(r) ||
-		strings.IndexRune("()[]{}\",'`;#|\\", r) >= 0 ||
-		r == eof
 }
 
 // lexChar scans a character constant. The leading #\ is already
@@ -546,19 +500,19 @@ func lexChar(l *Scanner) stateFn {
 	switch r := l.next(); {
 	case r == 'u' && isHexDigit(l.peek()):
 		//fmt.Printf("4-digit unicode character\n")
-		l.acceptLimitedIsRun(isHexDigit, 4)
+		l.acceptLimitedRunOf(isHexDigit, 4)
 	case r == 'U' && isHexDigit(l.peek()):
 		//fmt.Printf("6-digit unicode character\n")
-		l.acceptLimitedIsRun(isHexDigit, 6)
+		l.acceptLimitedRunOf(isHexDigit, 6)
 	case unicode.IsLetter(r) && unicode.IsLetter(l.peek()):
 		//fmt.Printf("named character\n")
-		l.acceptIsRun(unicode.IsLetter)
+		l.acceptRunOf(unicode.IsLetter)
 		if namedCharacter(l.input[l.start+2:l.pos]) < 0 {
 			return l.error("unrecognized character name")
 		}
 	case isOctDigit(r):
 		//fmt.Printf("octal character\n")
-		l.acceptIsRun(isOctDigit)
+		l.acceptRunOf(isOctDigit)
 		// there must be exactly 1 or exactly 3 octal digits
 		runes := len([]rune(l.tokenText()))
 		if runes != 3 && runes != 5 {
@@ -568,8 +522,6 @@ func lexChar(l *Scanner) stateFn {
 		// This is either <letter followed by nonletter> or <nonletter
 		// followed by letter>, so accept just the first character.
 		//fmt.Printf("letter followed by nonletter, or vice versa\n")
-	case l.isDelimiter(l.peek()):
-		//fmt.Printf("character followed by delimiter\n")
 	default:
 		// <nonletter followed by nonletter>
 		//fmt.Printf("nonletter followed by nonletter\n")
