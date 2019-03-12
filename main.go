@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"perlmonger42/tdop/scan"
+	"github.com/perlmonger42/tdop/scan"
 )
 
 func writer() *tabwriter.Writer {

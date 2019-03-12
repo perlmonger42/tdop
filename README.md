@@ -10,17 +10,24 @@ will be a fairly direct transliteration of Crockford's JavaScript.
 From there I hope to grow it into a real Go program that can be used as a base
 for further research.
 
-Go Modules
+
+Go Version
 ========================================================================
-This repository is built with Go 1.12,
-and opts-in to the [modules-based behavior introduced in Go 1.11](
-https://github.com/golang/go/wiki/Modules#example).
+
+This repository is built with Go 1.12.
+
 
 Build Instructions
 ========================================================================
 
-Change directory to the root of the `tdop` project and execute:
-
 ```bash
-    go generate && go test ./... && go build
+    cd ~/wherever/you/keep/your/stuff
+    mkdir -p tdop/src/perlmonger42
+    git clone git@github.com:perlmonger42/tdop.git tdop/src/perlmonger42/tdop
+    cd ./tdop
+    export GOPATH="$( cd "$(pwd)"; pwd )"
+    export PATH="$GOPATH/bin":$PATH
+    cd ./src/perlmonger42/tdop
+    go get golang.org/x/tools/cmd/stringer
+    go generate ./... && go test ./... && go install . && $GOPATH/bin/tdop
 ```

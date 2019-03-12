@@ -51,15 +51,9 @@ var testcases []testcase = []testcase{
 		},
 	},
 	{
-		input: "'`,,@#f#t .",
+		input: "  // comment\nX15",
 		output: []wanted{
-			{Quote, "'"},
-			{QuasiQuote, "`"},
-			{Unquote, ","},
-			{UnquoteSplicing, ",@"},
-			{False, "#f"},
-			{True, "#t"},
-			{Dot, "."},
+			{Identifier, "X15"},
 			{EOF, "<EOF>"},
 		},
 	},
@@ -87,34 +81,13 @@ var testcases []testcase = []testcase{
 			{EOF, "<EOF>"},
 		},
 	},
-	{
-		input: `foo a^2+b^2=c^2 @@@ 1#2-3%4 kebab-case-names` +
-			"\n~!@#$%^&*_+-=:<>?./",
-		output: []wanted{
-			{Symbol, `foo`},
-			{Symbol, `a^2+b^2=c^2`},
-			{Symbol, `@@@`},
-			{Symbol, `1#2-3%4`},
-			{Symbol, `kebab-case-names`},
-			{Symbol, `~!@#$%^&*_+-=:<>?./`},
-			{EOF, "<EOF>"},
-		},
-	},
-	{
-		input: `#\space #\x`,
-		output: []wanted{
-			{Char, "#\\space"},
-			{Char, `#\x`},
-			{EOF, "<EOF>"},
-		},
-	},
 }
 
 func checkTestcase(t *testing.T, c *testcase) {
 	stringReader := strings.NewReader(c.input)
+	reportInput := fmt.Sprintf("input: %q\n", c.input)
 	scanner := NewScanner("<string>", stringReader)
 	for i, w := range c.output {
-		reportInput := fmt.Sprintf("input: %q\n", c.input)
 		token := scanner.Next()
 		if token.Type != w.Type {
 			t.Errorf("%s  token %d: wanted type %v, got %v",
