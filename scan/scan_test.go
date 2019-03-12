@@ -6,29 +6,6 @@ import (
 	"testing"
 )
 
-func expectToken(t *testing.T, scanner *Scanner, tokenType Type, tokenText string) {
-	token := scanner.Next()
-	if token.Type != tokenType {
-		t.Errorf("line %d: wanted type %v, got %v", token.Line, tokenType, token.Type)
-	}
-	if token.Text != tokenText {
-		t.Errorf("line %d: wanted text %q, got %q", token.Line, tokenText, token.Text)
-	}
-}
-
-func TestPunctuation(t *testing.T) {
-	stringReader := strings.NewReader("( [ ] )")
-	scanner := NewScanner("<string>", stringReader)
-	want := func(tokenType Type, tokenText string) {
-		expectToken(t, scanner, tokenType, tokenText)
-	}
-	want(LeftParen, "(")
-	want(LeftBrack, "[")
-	want(RightBrack, "]")
-	want(RightParen, ")")
-	want(EOF, "<EOF>")
-}
-
 type wanted struct {
 	Type
 	Text string

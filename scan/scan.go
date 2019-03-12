@@ -350,7 +350,7 @@ func lexBlockComment(l *Scanner) stateFn {
 
 // lexAny scans non-space items.
 func lexAny(l *Scanner) stateFn {
-	//	fmt.Printf("lexAny\n")//DEBUG
+	// fmt.Printf("lexAny: switch on '%c'\n", l.peek()) //DEBUG
 	switch r := l.next(); {
 	case r == eof:
 		return nil
@@ -365,7 +365,6 @@ func lexAny(l *Scanner) stateFn {
 		return lexName
 	case isDigit(r):
 		return lexNumber
-
 	case r == '/':
 		if l.peek() == '/' {
 			l.next()
@@ -395,7 +394,7 @@ func lexAny(l *Scanner) stateFn {
 	case r == '"':
 		return lexString
 	case r == '.':
-		l.emit(Dot)
+		return lexNumber
 	case r == ',':
 		if l.peek() == '@' {
 			l.next()
@@ -418,10 +417,10 @@ func lexAny(l *Scanner) stateFn {
 // lexSpace scans a run of space characters.
 // One space has already been seen.
 func lexSpace(l *Scanner) stateFn {
-	//	fmt.Printf("lexSpace\n")//DEBUG
+	// fmt.Printf("lexSpace\n")//DEBUG
 	for unicode.IsSpace(l.peek()) {
 		r := l.next()
-		//		fmt.Printf("lexSpace: consuming '%c'\n", r)//DEBUG
+		// fmt.Printf("lexSpace: consuming '%c'\n", r)//DEBUG
 		if l.isLineSeparator(r) {
 			l.line++
 		}
@@ -466,18 +465,26 @@ func isAlphanumeric(r rune) bool {
 	return isAlphabetic(r) || isDigit(r)
 }
 
-// lexNumber scans a number. The leading digit has already been consumed.
+// lexNumber scans a number. The leading digit or '.' has already been consumed.
 func lexNumber(l *Scanner) stateFn {
 	//	fmt.Printf("lexNumber\n")//DEBUG
-	l.acceptRunOf(isDigit)
-	if r := l.peek(); r != '.' {
-		l.emit(Fixnum)
-		return lexAny
+	l.backup()
+	digitsBeforeDot := (l.peek() != '.')
+	if digitsBeforeDot {
+		l.acceptRunOf(isDigit)
 	}
-	for isDigit(l.peek()) {
-		l.next()
+	if l.next() != '.' {
+		l.backup()
+	} else if !digitsBeforeDot && !isDigit(l.peek()) {
+		l.emit(Dot)
+		return lexAny
+	} else {
+		l.acceptRunOf(isDigit)
 	}
 	text := l.tokenText()
+	if !digitsBeforeDot {
+		text = "0" + text
+	}
 	_, err := strconv.ParseInt(text, 0, 64)
 	if err == nil {
 		l.emit(Fixnum)
@@ -548,7 +555,6 @@ func namedCharacter(s string) rune {
 	case "nul", "null":
 		return 0
 	case "backspace":
-		return '\010'
 	case "tab":
 		return '\011'
 	case "newline", "linefeed":
@@ -563,9 +569,8 @@ func namedCharacter(s string) rune {
 		return '\040'
 	case "rubout":
 		return '\177'
-	default:
-		return -1
 	}
+	return -1
 }
 
 func CharLiteralToRune(s string) rune {
