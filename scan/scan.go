@@ -32,36 +32,27 @@ const (
 	Punctuator // ( ) { } [ ] ? . , : ; ~ * /
 	Identifier // alphanumeric identifier
 
-	// Scheme tokens
-	LeftParen       // '('
-	LeftBrack       // '['
-	LeftBrace       // '{'
-	Quote           // '\''
-	QuasiQuote      // '`'
-	Unquote         // ','
-	UnquoteSplicing // ",@"
-	False           // "#f"
-	True            // "#t"
-	Dot             // "."
-	Ellipsis        // "..."
-	Fixnum          // a number with no fractional component
-	Flonum          // a number with a fractional component
-	String          // quoted string (includes quotes)
-	RightParen      // ')'
-	RightBrack      // ']'
-	RightBrace      // '}'
-	CharLiteral     // '#\space', e.g.
+	LeftParen  // '('
+	LeftBrack  // '['
+	LeftBrace  // '{'
+	RightParen // ')'
+	RightBrack // ']'
+	RightBrace // '}'
+	Comma      // ','
+	Dot        // '.'
+	Question   // '?'
+	Colon      // ':'
+	Tilde      // '~'
+	Star       // '*'
+	Slash      // '/'
+	Semicolon  // ';'
 
-	// Ivy tokens
-	Assign         // '='
-	Char           // printable ASCII character; grab bag for comma etc.
 	GreaterOrEqual // '>='
-	Number         // simple number
-	Operator       // known operator
-	Op             // "op", operator definition keyword
-	Rational       // rational number like 2/3
-	Semicolon      // ';'
-	Space          // run of spaces separating
+
+	Fixnum // a number with no fractional component
+	Flonum // a number with a fractional component
+	String // quoted string (includes quotes)
+
 )
 
 func (i Token) String() string {
@@ -425,46 +416,6 @@ func emitNumber(l *Scanner, text string) stateFn {
 	return lexAny
 }
 
-// lexChar scans a character constant. The leading #\ is already
-// scanned.
-func lexChar(l *Scanner) stateFn {
-	//	fmt.Printf("lexChar\n")//DEBUG
-	switch r := l.next(); {
-	case r == 'u' && isHexDigit(l.peek()):
-		//fmt.Printf("4-digit unicode character\n")
-		l.acceptLimitedRunOf(isHexDigit, 4)
-	case r == 'U' && isHexDigit(l.peek()):
-		//fmt.Printf("6-digit unicode character\n")
-		l.acceptLimitedRunOf(isHexDigit, 6)
-	case unicode.IsLetter(r) && unicode.IsLetter(l.peek()):
-		//fmt.Printf("named character\n")
-		l.acceptRunOf(unicode.IsLetter)
-		if namedCharacter(l.input[l.start+2:l.pos]) < 0 {
-			return l.error("unrecognized character name")
-		}
-	case isOctDigit(r):
-		//fmt.Printf("octal character\n")
-		l.acceptRunOf(isOctDigit)
-		// there must be exactly 1 or exactly 3 octal digits
-		runes := len([]rune(l.tokenText()))
-		if runes != 3 && runes != 5 {
-			return l.error("bad octal character syntax")
-		}
-	case unicode.IsLetter(r) != unicode.IsLetter(l.peek()):
-		// This is either <letter followed by nonletter> or <nonletter
-		// followed by letter>, so accept just the first character.
-		//fmt.Printf("letter followed by nonletter, or vice versa\n")
-	default:
-		// <nonletter followed by nonletter>
-		//fmt.Printf("nonletter followed by nonletter\n")
-		if l.peek() != eof {
-			return l.error("bad character syntax")
-		}
-	}
-	l.emit(Char)
-	return lexAny
-}
-
 func isHexDigit(r rune) bool {
 	return '0' <= r && r <= '9' ||
 		'a' <= r && r <= 'f' ||
@@ -554,7 +505,6 @@ func lexAny(l *Scanner) stateFn {
 	case l.isLineSeparator(r):
 		l.incLine()
 		l.ignore()
-		return lexAny
 	case unicode.IsSpace(r):
 		return lexSpace
 
@@ -567,45 +517,38 @@ func lexAny(l *Scanner) stateFn {
 			l.next()
 			return lexLineComment
 		} else {
-			l.emit(Punctuator)
+			l.emit(Slash)
 		}
-		return lexAny
 	case r == '(':
 		l.emit(LeftParen)
-		return lexAny
 	case r == ')':
 		l.emit(RightParen)
-		return lexAny
 	case r == '[':
 		l.emit(LeftBrack)
-		return lexAny
 	case r == ']':
 		l.emit(RightBrack)
-		return lexAny
 	case r == '{':
 		l.emit(LeftBrace)
-		return lexAny
 	case r == '}':
 		l.emit(RightBrace)
-		return lexAny
 	case r == '"':
 		return lexString
 	case r == '.':
 		return lexDot
 	case r == ',':
-		if l.peek() == '@' {
-			l.next()
-			l.emit(UnquoteSplicing)
-		} else {
-			l.emit(Unquote)
-		}
-		return lexAny
-	case r == '\'':
-		l.emit(Quote)
-		return lexAny
-	case r == '`':
-		l.emit(QuasiQuote)
-		return lexAny
+		l.emit(Comma)
+	case r == '?':
+		l.emit(Question)
+	case r == ':':
+		l.emit(Colon)
+	case r == ';':
+		l.emit(Semicolon)
+	case r == '~':
+		l.emit(Tilde)
+	case r == '*':
+		l.emit(Star)
+	default:
+		l.errorf(`unexpected input character: %c`, r)
 	}
 	//   anything else not listed above
 	return lexAny

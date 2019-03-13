@@ -4,9 +4,9 @@ package scan
 
 import "strconv"
 
-const _Type_name = "EOFErrorPunctuatorIdentifierLeftParenLeftBrackLeftBraceQuoteQuasiQuoteUnquoteUnquoteSplicingFalseTrueDotEllipsisFixnumFlonumStringRightParenRightBrackRightBraceCharLiteralAssignCharGreaterOrEqualNumberOperatorOpRationalSemicolonSpace"
+const _Type_name = "EOFErrorPunctuatorIdentifierLeftParenLeftBrackLeftBraceRightParenRightBrackRightBraceCommaDotQuestionColonTildeStarSlashSemicolonGreaterOrEqualFixnumFlonumString"
 
-var _Type_index = [...]uint8{0, 3, 8, 18, 28, 37, 46, 55, 60, 70, 77, 92, 97, 101, 104, 112, 118, 124, 130, 140, 150, 160, 171, 177, 181, 195, 201, 209, 211, 219, 228, 233}
+var _Type_index = [...]uint8{0, 3, 8, 18, 28, 37, 46, 55, 65, 75, 85, 90, 93, 101, 106, 111, 115, 120, 129, 143, 149, 155, 161}
 
 func (i Type) String() string {
 	if i < 0 || i >= Type(len(_Type_index)-1) {

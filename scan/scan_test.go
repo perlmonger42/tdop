@@ -18,12 +18,22 @@ type testcase struct {
 
 var testcases []testcase = []testcase{
 	{
-		input: "([])",
+		input: "([]){}?.,:;~*/",
 		output: []wanted{
 			{LeftParen, "("},
 			{LeftBrack, "["},
 			{RightBrack, "]"},
 			{RightParen, ")"},
+			{LeftBrace, "{"},
+			{RightBrace, "}"},
+			{Question, "?"},
+			{Dot, "."},
+			{Comma, ","},
+			{Colon, ":"},
+			{Semicolon, ";"},
+			{Tilde, "~"},
+			{Star, "*"},
+			{Slash, "/"},
 			{EOF, "<EOF>"},
 		},
 	},
