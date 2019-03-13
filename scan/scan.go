@@ -32,20 +32,24 @@ const (
 	Punctuator // ( ) { } [ ] ? . , : ; ~ * /
 	Identifier // alphanumeric identifier
 
-	LeftParen  // '('
-	LeftBrack  // '['
-	LeftBrace  // '{'
-	RightParen // ')'
-	RightBrack // ']'
-	RightBrace // '}'
-	Comma      // ','
-	Dot        // '.'
-	Question   // '?'
-	Colon      // ':'
-	Tilde      // '~'
-	Star       // '*'
-	Slash      // '/'
-	Semicolon  // ';'
+	LeftParen   // '('
+	LeftBrack   // '['
+	LeftBrace   // '{'
+	RightParen  // ')'
+	RightBrack  // ']'
+	RightBrace  // '}'
+	Comma       // ','
+	Dot         // '.'
+	Question    // '?'
+	Colon       // ':'
+	Tilde       // '~'
+	Star        // '*'
+	Slash       // '/'
+	Semicolon   // ';'
+	Ampersand   // '&'
+	And         // "&&"
+	VerticalBar // '|'
+	Or          // "||"
 
 	GreaterOrEqual // '>='
 
@@ -136,6 +140,12 @@ func (l *Scanner) next() (r rune) {
 	return r
 }
 
+// backup steps back one rune. Can only be called once per call of next.
+func (l *Scanner) backup() {
+	//fmt.Printf("  bkup   %d\n", l.width)//DEBUG
+	l.pos -= l.width
+}
+
 // peek returns but does not consume the next rune in the input.
 func (l *Scanner) peek() rune {
 	//quiet_next = true //DEBUG
@@ -146,10 +156,28 @@ func (l *Scanner) peek() rune {
 	return r
 }
 
-// backup steps back one rune. Can only be called once per call of next.
-func (l *Scanner) backup() {
-	//fmt.Printf("  bkup   %d\n", l.width)//DEBUG
-	l.pos -= l.width
+// returns the previous character from the input without moving position
+func (l *Scanner) lookback() rune {
+	l.backup()
+	return l.next()
+}
+
+func (l *Scanner) skip(r rune) bool {
+	if l.next() == r {
+		fmt.Printf("skip: consuming '%c'\n", r) //DEBUG
+		return true
+	}
+	l.backup()
+	fmt.Printf("skip: wanted '%c'; putting '%c' back\n", r, l.peek()) //DEBUG
+	return false
+}
+
+func (l *Scanner) skipIf(isAcceptable func(rune) bool) bool {
+	if isAcceptable(l.next()) {
+		return true
+	}
+	l.backup()
+	return false
 }
 
 func (l *Scanner) incLine() {
@@ -229,8 +257,7 @@ func (l *Scanner) acceptLimitedRunOf(isAcceptable func(rune) bool, maxCount int6
 //     LS:    Line Separator, U+2028
 //     PS:    Paragraph Separator, U+2029
 func (l *Scanner) isLineSeparator(r rune) bool {
-	if r == '\r' && l.peek() == '\n' {
-		l.next()
+	if r == '\r' && l.skip('\n') {
 		return true
 	}
 	return r == '\n' || r == '\v' || r == '\f' || r == '\r' ||
@@ -304,7 +331,7 @@ func (l *Scanner) Peek() (result Token) {
 //
 // TODO: pass comments to parser?
 func lexLineComment(l *Scanner) stateFn {
-	//	fmt.Printf("lexLineComment\n")//DEBUG
+	// fmt.Printf("lexLineComment\n") //DEBUG
 	for r := l.next(); !l.isLineSeparator(r); r = l.next() {
 		if r == eof {
 			l.ignore()
@@ -322,7 +349,6 @@ func lexSpace(l *Scanner) stateFn {
 	// fmt.Printf("lexSpace\n")//DEBUG
 	for unicode.IsSpace(l.peek()) {
 		r := l.next()
-		// fmt.Printf("lexSpace: consuming '%c'\n", r)//DEBUG
 		if l.isLineSeparator(r) {
 			l.line++
 		}
@@ -348,7 +374,7 @@ func lexSpace(l *Scanner) stateFn {
 // https://stackoverflow.com/questions/34689850/whats-allowed-in-a-perl-6-identifier#answer-34693397
 func lexName(l *Scanner) stateFn {
 	//	fmt.Printf("lexName\n")//DEBUG
-	for isAlphanumeric(l.peek()) {
+	for l.skipIf(isAlphanumeric) {
 		l.next()
 	}
 	l.emit(Identifier)
@@ -382,7 +408,7 @@ func lexDigits(l *Scanner) stateFn {
 
 func lexDigitsDot(l *Scanner) stateFn {
 	// one or more digits and a single '.' have been consumed
-	if isDigit(l.peek()) {
+	if l.skipIf(isDigit) {
 		l.acceptRunOf(isDigit)
 	}
 	return emitNumber(l, l.tokenText())
@@ -498,58 +524,86 @@ func lexString(l *Scanner) stateFn {
 
 // lexAny scans non-space items.
 func lexAny(l *Scanner) stateFn {
-	// fmt.Printf("lexAny: switch on '%c'\n", l.peek()) //DEBUG
-	switch r := l.next(); {
-	case r == eof:
+	r := l.next()
+	// fmt.Printf("lexAny: switch on '%c'\n", r) //DEBUG
+	switch r {
+	case eof:
 		return nil
-	case l.isLineSeparator(r):
+	case '\r':
+		l.skip('\n') // if present
+		fallthrough
+	case '\n':
 		l.incLine()
 		l.ignore()
-	case unicode.IsSpace(r):
+	case ' ', '\t':
 		return lexSpace
-
-	case isAlphabetic(r):
-		return lexName
-	case isDigit(r):
-		return lexDigits
-	case r == '/':
-		if l.peek() == '/' {
-			l.next()
+	case '/':
+		if l.skip('/') {
 			return lexLineComment
 		} else {
 			l.emit(Slash)
 		}
-	case r == '(':
+	case '(':
 		l.emit(LeftParen)
-	case r == ')':
+	case ')':
 		l.emit(RightParen)
-	case r == '[':
+	case '[':
 		l.emit(LeftBrack)
-	case r == ']':
+	case ']':
 		l.emit(RightBrack)
-	case r == '{':
+	case '{':
 		l.emit(LeftBrace)
-	case r == '}':
+	case '}':
 		l.emit(RightBrace)
-	case r == '"':
+	case '"':
 		return lexString
-	case r == '.':
+	case '.':
 		return lexDot
-	case r == ',':
+	case ',':
 		l.emit(Comma)
-	case r == '?':
+	case '?':
 		l.emit(Question)
-	case r == ':':
+	case ':':
 		l.emit(Colon)
-	case r == ';':
+	case ';':
 		l.emit(Semicolon)
-	case r == '~':
+	case '~':
 		l.emit(Tilde)
-	case r == '*':
+	case '*':
 		l.emit(Star)
+	case '&':
+		if l.skip('&') {
+			l.emit(Ampersand)
+		} else {
+			l.emit(And)
+		}
+	case '|':
+		if l.skip('|') {
+			l.emit(Or)
+		} else {
+			l.emit(VerticalBar)
+		}
+	case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+		'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+		'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+		'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
+		return lexName
+	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		return lexDigits
 	default:
-		l.errorf(`unexpected input character: %c`, r)
+		if isAlphabetic(r) { // non-ASCII Unicode letters
+			return lexName
+		} else if isDigit(r) { // non-ASCII Unicode decimal digits
+			return lexDigits
+		} else if unicode.IsSpace(r) { // non-ASCII Unicode spaces
+			return lexSpace
+		} else if l.isLineSeparator(r) { // non-ASCII Unicode newlines
+			l.incLine()
+			l.ignore()
+		} else {
+			// anything not otherwise handled
+			return l.errorf(`unexpected input character: %c`, r)
+		}
 	}
-	//   anything else not listed above
 	return lexAny
 }

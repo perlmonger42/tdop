@@ -38,13 +38,6 @@ var testcases []testcase = []testcase{
 		},
 	},
 	{
-		input: "  // comment\nX15",
-		output: []wanted{
-			{Identifier, "X15"},
-			{EOF, "<EOF>"},
-		},
-	},
-	{
 		input: "000 1 42\n 3.1415926 1.2\n 3. .4",
 		output: []wanted{
 			{Fixnum, "000"},
@@ -67,6 +60,13 @@ var testcases []testcase = []testcase{
 			{String, `"howdy"`},
 			{String, `"\"\n"`},
 			{Error, "unterminated quoted string"},
+			{EOF, "<EOF>"},
+		},
+	},
+	{
+		input: "  // comment\nX15",
+		output: []wanted{
+			{Identifier, "X15"},
 			{EOF, "<EOF>"},
 		},
 	},
