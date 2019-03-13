@@ -364,7 +364,7 @@ func lexAny(l *Scanner) stateFn {
 	case isAlphabetic(r):
 		return lexName
 	case isDigit(r):
-		return lexNumber
+		return lexDigits
 	case r == '/':
 		if l.peek() == '/' {
 			l.next()
@@ -394,7 +394,7 @@ func lexAny(l *Scanner) stateFn {
 	case r == '"':
 		return lexString
 	case r == '.':
-		return lexNumber
+		return lexDot
 	case r == ',':
 		if l.peek() == '@' {
 			l.next()
@@ -465,45 +465,49 @@ func isAlphanumeric(r rune) bool {
 	return isAlphabetic(r) || isDigit(r)
 }
 
-// lexNumber scans a number. The leading digit or '.' has already been consumed.
-func lexNumber(l *Scanner) stateFn {
-	//	fmt.Printf("lexNumber\n")//DEBUG
+// lexDigits scans /\d+(\.\d*)?/
+// I.e., an integer or floating-point literal.
+// The leading digit has already been consumed.
+func lexDigits(l *Scanner) stateFn {
+	//	fmt.Printf("lexDigits\n")//DEBUG
+	l.acceptRunOf(isDigit)
+	if l.next() == '.' {
+		return lexDigitsDot
+	}
 	l.backup()
-	sawDigitsBeforeDot := false
-	sawDot := false
-	sawDigitsAfterDot := false
+	return emitNumber(l, l.tokenText())
+}
 
+func lexDigitsDot(l *Scanner) stateFn {
+	// one or more digits and a single '.' have been consumed
 	if isDigit(l.peek()) {
-		sawDigitsBeforeDot = true
 		l.acceptRunOf(isDigit)
 	}
-	if l.peek() == '.' {
-		l.next()
-		sawDot = true
-	}
-	if sawDot && isDigit(l.peek()) {
-		sawDigitsAfterDot = true
+	return emitNumber(l, l.tokenText())
+}
+
+func lexDot(l *Scanner) stateFn {
+	// a single '.' has been consumed
+	if isDigit(l.next()) {
 		l.acceptRunOf(isDigit)
+		text := "0" + l.tokenText() // strconv demands leading digit
+		return emitNumber(l, text)
 	}
+	l.backup()
+	l.emit(Dot)
+	return lexAny
+}
 
-	if sawDot && !sawDigitsBeforeDot && !sawDigitsAfterDot {
-		l.emit(Dot)
-		return lexAny
-	}
-
-	text := l.tokenText()
-	if !sawDigitsBeforeDot {
-		text = "0" + text
-	}
+func emitNumber(l *Scanner, text string) stateFn {
 	_, err := strconv.ParseInt(text, 0, 64)
 	if err == nil {
 		l.emit(Fixnum)
 	} else if err.(*strconv.NumError).Err == strconv.ErrRange {
-		return l.error("Bignums not yet implemented")
+		return l.error("Bigints not supported")
 	} else if _, err = strconv.ParseFloat(text, 64); err == nil {
 		l.emit(Flonum)
 	} else if err.(*strconv.NumError).Err == strconv.ErrRange {
-		return l.error("Bignums not yet implemented")
+		return l.error("Bigfloats not supported")
 	} else {
 		panic(fmt.Sprintf("unexpected strconv error on %q: %v", text, err))
 	}
