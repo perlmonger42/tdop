@@ -48,12 +48,14 @@ var testcases []testcase = []testcase{
 		},
 	},
 	{
-		input: `"" "?" "howdy" "\"\x" "unfinished business`,
+		input: `"\a" "" "?" "howdy" "\"\n" "unfinished business`,
 		output: []wanted{
+			{Error, `unrecognized escape sequence: \\a`},
+			{String, `"\a"`},
 			{String, `""`},
 			{String, `"?"`},
 			{String, `"howdy"`},
-			{String, `"\"\x"`},
+			{String, `"\"\n"`},
 			{Error, "unterminated quoted string"},
 			{EOF, "<EOF>"},
 		},

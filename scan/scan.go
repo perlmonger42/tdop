@@ -325,95 +325,6 @@ func lexLineComment(l *Scanner) stateFn {
 	return lexAny
 }
 
-// lexBlockComment scans a (nestable) #|-to-|# comment.
-// The `#|` comment marker has been consumed.
-func lexBlockComment(l *Scanner) stateFn {
-	//	fmt.Printf("lexBlockComment\n")//DEBUG
-	depth := 1
-	for {
-		switch r := l.next(); {
-		case r == '|' && l.peek() == '#':
-			l.next()
-			depth -= 1
-			if depth <= 0 {
-				l.ignore()
-				return lexAny
-			}
-		case r == '#' && l.peek() == '|':
-			l.next()
-			depth += 1
-		case r == eof:
-			return l.errorf("unterminated block comment")
-		}
-	}
-}
-
-// lexAny scans non-space items.
-func lexAny(l *Scanner) stateFn {
-	// fmt.Printf("lexAny: switch on '%c'\n", l.peek()) //DEBUG
-	switch r := l.next(); {
-	case r == eof:
-		return nil
-	case l.isLineSeparator(r):
-		l.incLine()
-		l.ignore()
-		return lexAny
-	case unicode.IsSpace(r):
-		return lexSpace
-
-	case isAlphabetic(r):
-		return lexName
-	case isDigit(r):
-		return lexDigits
-	case r == '/':
-		if l.peek() == '/' {
-			l.next()
-			return lexLineComment
-		} else {
-			l.emit(Punctuator)
-		}
-		return lexAny
-	case r == '(':
-		l.emit(LeftParen)
-		return lexAny
-	case r == ')':
-		l.emit(RightParen)
-		return lexAny
-	case r == '[':
-		l.emit(LeftBrack)
-		return lexAny
-	case r == ']':
-		l.emit(RightBrack)
-		return lexAny
-	case r == '{':
-		l.emit(LeftBrace)
-		return lexAny
-	case r == '}':
-		l.emit(RightBrace)
-		return lexAny
-	case r == '"':
-		return lexString
-	case r == '.':
-		return lexDot
-	case r == ',':
-		if l.peek() == '@' {
-			l.next()
-			l.emit(UnquoteSplicing)
-		} else {
-			l.emit(Unquote)
-		}
-		return lexAny
-	case r == '\'':
-		l.emit(Quote)
-		return lexAny
-	case r == '`':
-		l.emit(QuasiQuote)
-		return lexAny
-	}
-	//   anything else not listed above
-	return lexAny
-}
-
 // lexSpace scans a run of space characters.
 // One space has already been seen.
 func lexSpace(l *Scanner) stateFn {
@@ -616,6 +527,9 @@ func lexString(l *Scanner) stateFn {
 		switch r := l.next(); {
 		case r == '\\':
 			if r := l.next(); r != eof && !l.isLineSeparator(r) {
+				if !strings.ContainsRune(`nr"\`, r) {
+					l.errorf(`unrecognized escape sequence: \\%c`, r)
+				}
 				break // switch
 			}
 			fallthrough
@@ -629,4 +543,70 @@ func lexString(l *Scanner) stateFn {
 			return lexAny
 		}
 	}
+}
+
+// lexAny scans non-space items.
+func lexAny(l *Scanner) stateFn {
+	// fmt.Printf("lexAny: switch on '%c'\n", l.peek()) //DEBUG
+	switch r := l.next(); {
+	case r == eof:
+		return nil
+	case l.isLineSeparator(r):
+		l.incLine()
+		l.ignore()
+		return lexAny
+	case unicode.IsSpace(r):
+		return lexSpace
+
+	case isAlphabetic(r):
+		return lexName
+	case isDigit(r):
+		return lexDigits
+	case r == '/':
+		if l.peek() == '/' {
+			l.next()
+			return lexLineComment
+		} else {
+			l.emit(Punctuator)
+		}
+		return lexAny
+	case r == '(':
+		l.emit(LeftParen)
+		return lexAny
+	case r == ')':
+		l.emit(RightParen)
+		return lexAny
+	case r == '[':
+		l.emit(LeftBrack)
+		return lexAny
+	case r == ']':
+		l.emit(RightBrack)
+		return lexAny
+	case r == '{':
+		l.emit(LeftBrace)
+		return lexAny
+	case r == '}':
+		l.emit(RightBrace)
+		return lexAny
+	case r == '"':
+		return lexString
+	case r == '.':
+		return lexDot
+	case r == ',':
+		if l.peek() == '@' {
+			l.next()
+			l.emit(UnquoteSplicing)
+		} else {
+			l.emit(Unquote)
+		}
+		return lexAny
+	case r == '\'':
+		l.emit(Quote)
+		return lexAny
+	case r == '`':
+		l.emit(QuasiQuote)
+		return lexAny
+	}
+	//   anything else not listed above
+	return lexAny
 }
