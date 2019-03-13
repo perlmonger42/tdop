@@ -28,6 +28,6 @@ Build Instructions
     export GOPATH="$( cd "$(pwd)"; pwd )"
     export PATH="$GOPATH/bin":$PATH
     cd ./src/perlmonger42/tdop
-    go get golang.org/x/tools/cmd/stringer
+    go get golang.org/x/tools/cmd/stringer # install prerequisite
     go generate ./... && go test ./... && go install . && $GOPATH/bin/tdop
 ```

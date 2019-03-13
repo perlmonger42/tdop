@@ -161,7 +161,7 @@ func (l *Scanner) backup() {
 	l.pos -= l.width
 }
 
-func (l *Scanner) newline() {
+func (l *Scanner) incLine() {
 	l.line++
 }
 
@@ -320,7 +320,7 @@ func lexLineComment(l *Scanner) stateFn {
 			return lexAny
 		}
 	}
-	l.newline()
+	l.incLine()
 	l.ignore()
 	return lexAny
 }
@@ -355,7 +355,7 @@ func lexAny(l *Scanner) stateFn {
 	case r == eof:
 		return nil
 	case l.isLineSeparator(r):
-		l.newline()
+		l.incLine()
 		l.ignore()
 		return lexAny
 	case unicode.IsSpace(r):
@@ -469,20 +469,30 @@ func isAlphanumeric(r rune) bool {
 func lexNumber(l *Scanner) stateFn {
 	//	fmt.Printf("lexNumber\n")//DEBUG
 	l.backup()
-	digitsBeforeDot := (l.peek() != '.')
-	if digitsBeforeDot {
+	sawDigitsBeforeDot := false
+	sawDot := false
+	sawDigitsAfterDot := false
+
+	if isDigit(l.peek()) {
+		sawDigitsBeforeDot = true
 		l.acceptRunOf(isDigit)
 	}
-	if l.next() != '.' {
-		l.backup()
-	} else if !digitsBeforeDot && !isDigit(l.peek()) {
+	if l.peek() == '.' {
+		l.next()
+		sawDot = true
+	}
+	if sawDot && isDigit(l.peek()) {
+		sawDigitsAfterDot = true
+		l.acceptRunOf(isDigit)
+	}
+
+	if sawDot && !sawDigitsBeforeDot && !sawDigitsAfterDot {
 		l.emit(Dot)
 		return lexAny
-	} else {
-		l.acceptRunOf(isDigit)
 	}
+
 	text := l.tokenText()
-	if !digitsBeforeDot {
+	if !sawDigitsBeforeDot {
 		text = "0" + text
 	}
 	_, err := strconv.ParseInt(text, 0, 64)
@@ -608,7 +618,7 @@ func lexString(l *Scanner) stateFn {
 		case r == eof || l.isLineSeparator(r):
 			return l.errorf("unterminated quoted string")
 			if r != eof {
-				l.newline()
+				l.incLine()
 			}
 		case r == '"':
 			l.emit(String)
