@@ -58,17 +58,18 @@ var testcases []testcase = []testcase{
 		},
 	},
 	{
-		input: "000 1 42\n 3.1415926 1.2\n 3. .4",
+		input: "000 1 42\n 3.1415926 1.2\n 3. .4 5.6e7",
 		output: []wanted{
-			{Number, "000"},
-			{Number, "1"},
-			{Number, "42"},
-			{Number, "3.1415926"},
-			{Number, "1.2"},
-			{Number, "3"},
+			{Fixnum, "000"},
+			{Fixnum, "1"},
+			{Fixnum, "42"},
+			{Flonum, "3.1415926"},
+			{Flonum, "1.2"},
+			{Fixnum, "3"},
 			{Punctuator, "."},
 			{Punctuator, "."},
-			{Number, "4"},
+			{Fixnum, "4"},
+			{Flonum, "5.6e7"},
 			{EOF, ""},
 		},
 	},
@@ -80,7 +81,7 @@ var testcases []testcase = []testcase{
 			{String, `"?"`},
 			{String, `"howdy"`},
 			{String, `"\"\n"`},
-			{String, `"unfinished business`},
+			{UnterminatedString, `"unfinished business`},
 			{EOF, ""},
 		},
 	},
@@ -109,20 +110,12 @@ func checkTestcase(t *testing.T, c *testcase) {
 			continue
 		}
 		w := c.output[i]
-		if token.Type != w.Type {
+		if token.Type != w.Type || token.Text != w.Text {
 			if len(reportInput) > 0 {
 				t.Errorf("%s", reportInput)
 			}
-			t.Errorf("  token %d: wanted type %v, got %v",
-				i, w.Type, token.Type)
-			reportInput = ""
-		}
-		if token.Text != w.Text {
-			if len(reportInput) > 0 {
-				t.Errorf("%s", reportInput)
-			}
-			t.Errorf("  token %d: wanted text %q, got %q",
-				i, w.Text, token.Text)
+			t.Errorf("  token %d: wanted {%v,%q}, got {%v,%q}",
+				i, w.Type, w.Text, token.Type, token.Text)
 			reportInput = ""
 		}
 	}

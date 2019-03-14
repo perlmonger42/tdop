@@ -19,11 +19,39 @@ const (
 
 	Name       // alphanumeric identifier
 	Punctuator // ( ) { } [ ] ? . , : ; ~ * /
-	Number
+	Fixnum
+	Flonum
 	String
+	UnterminatedString
 )
 
-var tokenRegex = regexp.MustCompile(`(\s+)|(\/\/.*)|([a-zA-Z][a-zA-Z_0-9]*)|(\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)|("(?:[^"\\]|\\(?:.|u[0-9a-fA-F]{4}))*"?)|([(){}\[\]?.,:;~*\/]|&&?|\|\|?|[+\-<>]=?|[!=](?:==)?)|(.)`)
+const reWhitespace = `(\s+)`
+const reCommentToEol = `(\/\/.*)`
+const reName = `([a-zA-Z][a-zA-Z_0-9]*)`
+const reFixnum = `(\d+)`
+const reFloat1 = `\d+[eE][+\-]?\d+`
+const reFloat2 = `\d+\.\d+[eE][+\-]?\d+`
+const reFloat3 = `\d+\.\d+`
+const reFlonum = `(` + reFloat1 + `|` + reFloat2 + `|` + reFloat3 + `)`
+const reString = `("(?:[^"\\]|\\(?:.|u[0-9a-fA-F]{4}))*")`
+const rePunctuator = `([(){}\[\]?.,:;~*\/]|&&?|\|\|?|[+\-<>]=?|[!=](?:==)?)`
+const reUnterminatedString = `("(?:[^"\\]|\\(?:.|u[0-9a-fA-F]{4}))*)`
+const reError = `(.)`
+
+var tokenRegex = regexp.MustCompile(
+	strings.Join([]string{
+		reWhitespace,
+		reCommentToEol,
+		reName,
+		reFlonum,
+		reFixnum,
+		reString,
+		rePunctuator,
+		reUnterminatedString,
+		reError,
+	},
+		"|"),
+)
 
 // Token represents a lexical unit returned from the scanner.
 type Token struct {
@@ -78,13 +106,17 @@ func TokenizeLines(sourceLines []string) []Token {
 			} else if loc[6] >= 0 {
 				emit(Name, 6)
 			} else if loc[8] >= 0 {
-				emit(Number, 8)
+				emit(Flonum, 8)
 			} else if loc[10] >= 0 {
-				emit(String, 10)
+				emit(Fixnum, 10)
 			} else if loc[12] >= 0 {
-				emit(Punctuator, 12)
+				emit(String, 12)
 			} else if loc[14] >= 0 {
-				emit(Error, 14)
+				emit(Punctuator, 14)
+			} else if loc[16] >= 0 {
+				emit(UnterminatedString, 16)
+			} else if loc[18] >= 0 {
+				emit(Error, 18)
 			} else {
 				panic(`token regex didn't match *anything*`)
 			}

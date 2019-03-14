@@ -4,9 +4,9 @@ package scan
 
 import "strconv"
 
-const _Type_name = "EOFErrorNamePunctuatorNumberString"
+const _Type_name = "EOFErrorNamePunctuatorFixnumFlonumStringUnterminatedString"
 
-var _Type_index = [...]uint8{0, 3, 8, 12, 22, 28, 34}
+var _Type_index = [...]uint8{0, 3, 8, 12, 22, 28, 34, 40, 58}
 
 func (i Type) String() string {
 	if i < 0 || i >= Type(len(_Type_index)-1) {
