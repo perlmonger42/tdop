@@ -2,7 +2,6 @@ package scan
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -18,7 +17,7 @@ type testcase struct {
 
 var testcases []testcase = []testcase{
 	{
-		input: "([]){}?.,:;~*/",
+		input: `([]){}?.,:;~*/`,
 		output: []wanted{
 			{Punctuator, "("},
 			{Punctuator, "["},
@@ -34,7 +33,7 @@ var testcases []testcase = []testcase{
 			{Punctuator, "~"},
 			{Punctuator, "*"},
 			{Punctuator, "/"},
-			{EOF, "<EOF>"},
+			{EOF, ""},
 		},
 	},
 	{
@@ -53,60 +52,87 @@ var testcases []testcase = []testcase{
 			{Punctuator, "!"},
 			{Punctuator, ","},
 			{Punctuator, "="},
-			{Error, "`!=` not supported (use `!==` instead)"},
-			{EOF, "<EOF>"},
+			{Punctuator, "!"},
+			{Punctuator, "="},
+			{EOF, ""},
 		},
 	},
 	{
 		input: "000 1 42\n 3.1415926 1.2\n 3. .4",
 		output: []wanted{
-			{Fixnum, "000"},
-			{Fixnum, "1"},
-			{Fixnum, "42"},
-			{Flonum, "3.1415926"},
-			{Flonum, "1.2"},
-			{Flonum, "3."},
-			{Flonum, ".4"},
-			{EOF, "<EOF>"},
+			{Number, "000"},
+			{Number, "1"},
+			{Number, "42"},
+			{Number, "3.1415926"},
+			{Number, "1.2"},
+			{Number, "3"},
+			{Punctuator, "."},
+			{Punctuator, "."},
+			{Number, "4"},
+			{EOF, ""},
 		},
 	},
 	{
 		input: `"\a" "" "?" "howdy" "\"\n" "unfinished business`,
 		output: []wanted{
-			{Error, `unrecognized escape sequence: \\a`},
 			{String, `"\a"`},
 			{String, `""`},
 			{String, `"?"`},
 			{String, `"howdy"`},
 			{String, `"\"\n"`},
-			{Error, "unterminated quoted string"},
-			{EOF, "<EOF>"},
+			{String, `"unfinished business`},
+			{EOF, ""},
 		},
 	},
 	{
 		input: "  // comment\nX15",
 		output: []wanted{
-			{Identifier, "X15"},
-			{EOF, "<EOF>"},
+			{Name, "X15"},
+			{EOF, ""},
 		},
 	},
 }
 
 func checkTestcase(t *testing.T, c *testcase) {
-	stringReader := strings.NewReader(c.input)
-	reportInput := fmt.Sprintf("input: %q\n", c.input)
-	scanner := NewScanner("<string>", stringReader)
-	for i, w := range c.output {
-		token := scanner.Next()
+	reportInput := fmt.Sprintf("input: %#q\n", c.input)
+	var i int
+	var token Token
+	tokens := TokenizeString(c.input)
+
+	for i, token = range tokens {
+		if i >= len(c.output) {
+			if len(reportInput) > 0 {
+				t.Errorf("%s", reportInput)
+			}
+			t.Errorf("  token %d: unexpected token %v",
+				i, token)
+			continue
+		}
+		w := c.output[i]
 		if token.Type != w.Type {
-			t.Errorf("%s  token %d: wanted type %v, got %v",
-				reportInput, i, w.Type, token.Type)
+			if len(reportInput) > 0 {
+				t.Errorf("%s", reportInput)
+			}
+			t.Errorf("  token %d: wanted type %v, got %v",
+				i, w.Type, token.Type)
 			reportInput = ""
 		}
 		if token.Text != w.Text {
-			t.Errorf("%s  token %d: wanted text %q, got %q",
-				reportInput, i, w.Text, token.Text)
+			if len(reportInput) > 0 {
+				t.Errorf("%s", reportInput)
+			}
+			t.Errorf("  token %d: wanted text %q, got %q",
+				i, w.Text, token.Text)
+			reportInput = ""
 		}
+	}
+	for i = len(tokens); i < len(c.output); i++ {
+		if len(reportInput) > 0 {
+			t.Errorf("%s", reportInput)
+		}
+		t.Errorf("  token %d: missing expected token %v\n",
+			i, c.output[i])
+		reportInput = ""
 	}
 }
 
