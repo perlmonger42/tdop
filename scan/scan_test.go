@@ -38,6 +38,26 @@ var testcases []testcase = []testcase{
 		},
 	},
 	{
+		input: "+-<>+=-=<=>====!==!,=!=",
+		output: []wanted{
+			{Punctuator, "+"},
+			{Punctuator, "-"},
+			{Punctuator, "<"},
+			{Punctuator, ">"},
+			{Punctuator, "+="},
+			{Punctuator, "-="},
+			{Punctuator, "<="},
+			{Punctuator, ">="},
+			{Punctuator, "==="},
+			{Punctuator, "!=="},
+			{Punctuator, "!"},
+			{Punctuator, ","},
+			{Punctuator, "="},
+			{Error, "`!=` not supported (use `!==` instead)"},
+			{EOF, "<EOF>"},
+		},
+	},
+	{
 		input: "000 1 42\n 3.1415926 1.2\n 3. .4",
 		output: []wanted{
 			{Fixnum, "000"},

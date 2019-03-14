@@ -145,11 +145,11 @@ func (l *Scanner) lookback() rune {
 
 func (l *Scanner) skip(r rune) bool {
 	if l.next() == r {
-		fmt.Printf("skip: consuming '%c'\n", r) //DEBUG
+		// fmt.Printf("skip: consuming '%c'\n", r) //DEBUG
 		return true
 	}
 	l.backup()
-	fmt.Printf("skip: wanted '%c'; putting '%c' back\n", r, l.peek()) //DEBUG
+	// fmt.Printf("skip: wanted '%c'; putting '%c' back\n", r, l.peek()) //DEBUG
 	return false
 }
 
@@ -532,30 +532,45 @@ func lexAny(l *Scanner) stateFn {
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return lexDigits
 	case '&':
+		// '&' or "&&"
 		l.skip('&')
 		l.emit(Punctuator)
 	case '|':
+		// '|' or "||"
 		l.skip('|')
 		l.emit(Punctuator)
 	case '/':
+		// '/' or "// comment"
 		if l.skip('/') {
 			return lexLineComment
 		}
-		l.emit(Punctuator) // '/'
+		l.emit(Punctuator)
+	case '+', '-', '<', '>':
+		// '+', '-', '<', '>', "+=", "-=", "<=", or ">="
+		l.skip('=')
+		l.emit(Punctuator)
+	case '!', '=':
+		// '!', '=', "!==", or "==="
+		if l.skip('=') && !l.skip('=') {
+			l.errorf("`!=` not supported (use `!==` instead)")
+			return lexAny
+		}
+		l.emit(Punctuator)
 	default:
-		if isAlphabetic(r) { // non-ASCII Unicode letters
+		// handle non-ASCII letters, digits, spaces, and newlines
+		if isAlphabetic(r) {
 			return lexName
-		} else if isDigit(r) { // non-ASCII Unicode decimal digits
+		} else if isDigit(r) {
 			return lexDigits
-		} else if unicode.IsSpace(r) { // non-ASCII Unicode spaces
+		} else if unicode.IsSpace(r) {
 			return lexSpace
-		} else if l.isLineSeparator(r) { // non-ASCII Unicode newlines
+		} else if l.isLineSeparator(r) {
 			l.incLine()
 			l.ignore()
-		} else {
-			// anything not otherwise handled
-			return l.errorf(`unexpected input character: %c`, r)
+			return lexAny
 		}
+		// anything not already handled is an error
+		return l.errorf(`unexpected input character: %c`, r)
 	}
 	return lexAny
 }
