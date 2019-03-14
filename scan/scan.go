@@ -32,25 +32,6 @@ const (
 	Punctuator // ( ) { } [ ] ? . , : ; ~ * /
 	Identifier // alphanumeric identifier
 
-	LeftParen   // '('
-	LeftBrack   // '['
-	LeftBrace   // '{'
-	RightParen  // ')'
-	RightBrack  // ']'
-	RightBrace  // '}'
-	Comma       // ','
-	Dot         // '.'
-	Question    // '?'
-	Colon       // ':'
-	Tilde       // '~'
-	Star        // '*'
-	Slash       // '/'
-	Semicolon   // ';'
-	Ampersand   // '&'
-	And         // "&&"
-	VerticalBar // '|'
-	Or          // "||"
-
 	GreaterOrEqual // '>='
 
 	Fixnum // a number with no fractional component
@@ -422,7 +403,7 @@ func lexDot(l *Scanner) stateFn {
 		return emitNumber(l, text)
 	}
 	l.backup()
-	l.emit(Dot)
+	l.emit(Punctuator)
 	return lexAny
 }
 
@@ -537,52 +518,12 @@ func lexAny(l *Scanner) stateFn {
 		l.ignore()
 	case ' ', '\t':
 		return lexSpace
-	case '/':
-		if l.skip('/') {
-			return lexLineComment
-		} else {
-			l.emit(Slash)
-		}
-	case '(':
-		l.emit(LeftParen)
-	case ')':
-		l.emit(RightParen)
-	case '[':
-		l.emit(LeftBrack)
-	case ']':
-		l.emit(RightBrack)
-	case '{':
-		l.emit(LeftBrace)
-	case '}':
-		l.emit(RightBrace)
 	case '"':
 		return lexString
+	case '(', ')', '[', ']', '{', '}', ',', '?', ':', ';', '~', '*':
+		l.emit(Punctuator)
 	case '.':
 		return lexDot
-	case ',':
-		l.emit(Comma)
-	case '?':
-		l.emit(Question)
-	case ':':
-		l.emit(Colon)
-	case ';':
-		l.emit(Semicolon)
-	case '~':
-		l.emit(Tilde)
-	case '*':
-		l.emit(Star)
-	case '&':
-		if l.skip('&') {
-			l.emit(Ampersand)
-		} else {
-			l.emit(And)
-		}
-	case '|':
-		if l.skip('|') {
-			l.emit(Or)
-		} else {
-			l.emit(VerticalBar)
-		}
 	case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
 		'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 		'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
@@ -590,6 +531,17 @@ func lexAny(l *Scanner) stateFn {
 		return lexName
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return lexDigits
+	case '&':
+		l.skip('&')
+		l.emit(Punctuator)
+	case '|':
+		l.skip('|')
+		l.emit(Punctuator)
+	case '/':
+		if l.skip('/') {
+			return lexLineComment
+		}
+		l.emit(Punctuator) // '/'
 	default:
 		if isAlphabetic(r) { // non-ASCII Unicode letters
 			return lexName
