@@ -7,12 +7,13 @@ import (
 
 type wanted struct {
 	Type
-	Text string
+	Value string
 }
 
 type testcase struct {
 	input  string
 	output []wanted
+	class  string
 }
 
 var testcases []testcase = []testcase{
@@ -33,7 +34,6 @@ var testcases []testcase = []testcase{
 			{Punctuator, "~"},
 			{Punctuator, "*"},
 			{Punctuator, "/"},
-			{EOF, ""},
 		},
 	},
 	{
@@ -54,7 +54,6 @@ var testcases []testcase = []testcase{
 			{Punctuator, "="},
 			{Punctuator, "!"},
 			{Punctuator, "="},
-			{EOF, ""},
 		},
 	},
 	{
@@ -70,7 +69,6 @@ var testcases []testcase = []testcase{
 			{Punctuator, "."},
 			{Fixnum, "4"},
 			{Flonum, "5.6e7"},
-			{EOF, ""},
 		},
 	},
 	{
@@ -82,14 +80,12 @@ var testcases []testcase = []testcase{
 			{String, `"howdy"`},
 			{String, `"\"\n"`},
 			{UnterminatedString, `"unfinished business`},
-			{EOF, ""},
 		},
 	},
 	{
 		input: "  // comment\nX15",
 		output: []wanted{
 			{Name, "X15"},
-			{EOF, ""},
 		},
 	},
 }
@@ -97,7 +93,7 @@ var testcases []testcase = []testcase{
 func checkTestcase(t *testing.T, c *testcase) {
 	reportInput := fmt.Sprintf("input: %#q\n", c.input)
 	var i int
-	var token Token
+	var token *Token
 	tokens := TokenizeString(c.input)
 
 	for i, token = range tokens {
@@ -110,12 +106,12 @@ func checkTestcase(t *testing.T, c *testcase) {
 			continue
 		}
 		w := c.output[i]
-		if token.Type != w.Type || token.Text != w.Text {
+		if token.Type != w.Type || token.Value != w.Value {
 			if len(reportInput) > 0 {
 				t.Errorf("%s", reportInput)
 			}
 			t.Errorf("  token %d: wanted {%v,%q}, got {%v,%q}",
-				i, w.Type, w.Text, token.Type, token.Text)
+				i, w.Type, w.Value, token.Type, token.Value)
 			reportInput = ""
 		}
 	}

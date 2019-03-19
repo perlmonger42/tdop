@@ -522,8 +522,7 @@ let make_parse = function () {
     });
 
     return function (array_of_tokens) {
-        tokens = array_of_tokens
-        ;
+        tokens = array_of_tokens;
         token_nr = 0;
         new_scope();
         advance();

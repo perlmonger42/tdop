@@ -8,6 +8,18 @@ import (
 	"github.com/perlmonger42/tdop/scan"
 )
 
+func parseString(source string) *scan.Token {
+	parser := scan.NewParser()
+	tokens := scan.TokenizeString(source)
+	return parser.Parse(tokens)
+}
+
+func TestAssignment() {
+	source := "let answer; answer = 42;"
+	tree := parseString(source)
+	fmt.Printf("Assignment:\n%v\n", tree)
+}
+
 func writer() *tabwriter.Writer {
 	minWidth := 0
 	tabWidth := 8
@@ -20,9 +32,11 @@ func writer() *tabwriter.Writer {
 func main() {
 	w := writer()
 	for i, token := range scan.TokenizeString("Hello, world!\n") {
-		fmt.Fprintf(w, "%d:\t %s \t %q \t\n", i, token.Type, token.Text)
+		fmt.Fprintf(w, "%d:\t %s \t %q \t\n", i, token.Type, token.Value)
 	}
 	w.Flush()
+
+	TestAssignment()
 }
 
 //OUTPUT:
