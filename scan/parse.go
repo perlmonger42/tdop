@@ -46,7 +46,7 @@ func (p *Parser) findInScope(name string) *Token {
 		return tok
 	} else {
 		t := p.symbol_table["(name)"]
-		t.arity = nameArity
+		t.NdArity = nameArity
 		return t
 	}
 }
@@ -59,16 +59,16 @@ func (p *Parser) symbol(name string, bp int) *Token {
 	var s *Token
 	var ok bool
 	if s, ok = p.symbol_table[name]; ok {
-		if bp >= s.lbp {
-			s.lbp = bp
+		if bp >= s.TkLbp {
+			s.TkLbp = bp
 		}
 	} else {
 		s = &Token{
-			id:    name,
-			Value: name,
-			lbp:   bp,
-			nud:   func(this *Token) *Token { this.Error("Undefined"); return this },
-			led: func(this, left *Token) *Token {
+			NdId:    name,
+			TkValue: name,
+			TkLbp:   bp,
+			TkNud:   func(this *Token) *Token { this.Error("Undefined"); return this },
+			TkLed: func(this, left *Token) *Token {
 				this.Error(fmt.Sprintf("Missing operator; left: %v", left))
 				return this
 			},
@@ -80,27 +80,27 @@ func (p *Parser) symbol(name string, bp int) *Token {
 
 func (p *Parser) constant(s string, v string) *Token {
 	x := p.symbol(s, -1)
-	x.nud = func(this *Token) *Token {
+	x.TkNud = func(this *Token) *Token {
 		//DEBUG fmt.Printf("constant %s: %v\n", v, this)
 		p.reserveInScope(this)
-		this.Value = p.symbol_table[this.id].Value
-		this.arity = literalArity
+		this.TkValue = p.symbol_table[this.NdId].TkValue
+		this.NdArity = literalArity
 		return this
 	}
-	x.Value = v
+	x.TkValue = v
 	return x
 }
 
 func (p *Parser) infix(id string, bp int, led BinaryDenotation) *Token {
 	s := p.symbol(id, bp)
-	s.led = led
+	s.TkLed = led
 	if led == nil {
-		s.led = func(this, left *Token) *Token {
-			this.first = left
-			//DEBUG fmt.Printf("infix after first: %v\n", this)
-			this.second = p.expression(bp)
-			this.arity = binaryArity
-			//DEBUG fmt.Printf("infix after second: %v\n", this)
+		s.TkLed = func(this, left *Token) *Token {
+			this.NdFirst = left
+			//DEBUG fmt.Printf("infix after NdFirst: %v\n", this)
+			this.NdSecond = p.expression(bp)
+			this.NdArity = binaryArity
+			//DEBUG fmt.Printf("infix after NdSecond: %v\n", this)
 			return this
 		}
 	}
@@ -109,14 +109,14 @@ func (p *Parser) infix(id string, bp int, led BinaryDenotation) *Token {
 
 func (p *Parser) infixr(id string, bp int, led BinaryDenotation) *Token {
 	s := p.symbol(id, bp)
-	s.led = led
+	s.TkLed = led
 	if led == nil {
-		s.led = func(this, left *Token) *Token {
-			this.first = left
-			//DEBUG fmt.Printf("infixr after first: %v\n", this)
-			this.second = p.expression(bp - 1)
-			this.arity = binaryArity
-			//DEBUG fmt.Printf("infixr after second: %v\n", this)
+		s.TkLed = func(this, left *Token) *Token {
+			this.NdFirst = left
+			//DEBUG fmt.Printf("infixr after NdFirst: %v\n", this)
+			this.NdSecond = p.expression(bp - 1)
+			this.NdArity = binaryArity
+			//DEBUG fmt.Printf("infixr after NdSecond: %v\n", this)
 			return this
 		}
 	}
@@ -124,34 +124,34 @@ func (p *Parser) infixr(id string, bp int, led BinaryDenotation) *Token {
 }
 
 func possibleLvalue(x *Token) bool {
-	return x.id == "." || x.id == "[" || x.arity == nameArity
+	return x.NdId == "." || x.NdId == "[" || x.NdArity == nameArity
 }
 
 func (p *Parser) assignment(id string) *Token {
 	return p.infixr(id, 10, func(this, left *Token) *Token {
-		//DEBUG fmt.Printf("assignment after first: %v\n", this)
+		//DEBUG fmt.Printf("assignment after NdFirst: %v\n", this)
 		if !possibleLvalue(left) {
 			left.Error("Bad lvalue.")
 		}
-		this.first = left
-		this.second = p.expression(9)
-		this.assignment = true
-		this.arity = binaryArity
-		//DEBUG fmt.Printf("assignment after second: %v\n", this)
+		this.NdFirst = left
+		this.NdSecond = p.expression(9)
+		this.NdAssignment = true
+		this.NdArity = binaryArity
+		//DEBUG fmt.Printf("assignment after NdSecond: %v\n", this)
 		return this
 	})
 }
 
 func (p *Parser) prefix(id string, nud UnaryDenotation) *Token {
 	s := p.symbol(id, -1)
-	s.nud = nud
+	s.TkNud = nud
 	if nud == nil {
-		s.nud = func(this *Token) *Token {
-			//DEBUG fmt.Printf("prefix before first: %v\n", this)
+		s.TkNud = func(this *Token) *Token {
+			//DEBUG fmt.Printf("prefix before NdFirst: %v\n", this)
 			p.reserveInScope(this)
-			this.first = p.expression(70)
-			this.arity = unaryArity
-			//DEBUG fmt.Printf("prefix after first: %v\n", this)
+			this.NdFirst = p.expression(70)
+			this.NdArity = unaryArity
+			//DEBUG fmt.Printf("prefix after NdFirst: %v\n", this)
 			return this
 		}
 	}
@@ -160,12 +160,12 @@ func (p *Parser) prefix(id string, nud UnaryDenotation) *Token {
 
 func (p *Parser) stmt(id string, std UnaryDenotation) *Token {
 	x := p.symbol(id, -1)
-	x.std = std
+	x.TkStd = std
 	return x
 }
 
 func (p *Parser) skip(id string) {
-	if p.token.id != id {
+	if p.token.NdId != id {
 		p.token.Error(fmt.Sprintf("Expected '%s'.", id))
 	}
 	p.advance()
@@ -178,8 +178,8 @@ func (p *Parser) advance() {
 	}
 	t := p.tokens[p.tokenNumber]
 	p.tokenNumber += 1
-	v := t.Value
-	a := t.Type
+	v := t.TkValue
+	a := t.TkType
 	var o *Token
 	var ok bool
 	if a == Name {
@@ -196,10 +196,10 @@ func (p *Parser) advance() {
 	}
 	p.token = &Token{}
 	*p.token = *o
-	p.token.Line = t.Line
-	p.token.Column = t.Column
-	p.token.Value = v
-	p.token.Type = a
+	p.token.TkLine = t.TkLine
+	p.token.TkColumn = t.TkColumn
+	p.token.TkValue = v
+	p.token.TkType = a
 	//fmt.Printf("next token: %v\n", p.token)
 }
 
@@ -209,15 +209,15 @@ func (p *Parser) expression(rbp int) *Token {
 	if t == nil {
 		panic("expression: initial token is nil")
 	}
-	if t.nud == nil {
+	if t.TkNud == nil {
 		panic(fmt.Sprintf("expression: nil nud for %s", t))
 		return t
 	}
-	left := t.nud(t)
-	for rbp < p.token.lbp {
+	left := t.TkNud(t)
+	for rbp < p.token.TkLbp {
 		t = p.token
 		p.advance()
-		left = t.led(t, left)
+		left = t.TkLed(t, left)
 	}
 	return left
 }
@@ -225,13 +225,13 @@ func (p *Parser) expression(rbp int) *Token {
 func (p *Parser) statement() *Token {
 	n := p.token
 
-	if n.std != nil {
+	if n.TkStd != nil {
 		p.advance()
 		p.reserveInScope(n)
-		return n.std(n)
+		return n.TkStd(n)
 	}
 	v := p.expression(0)
-	if !v.assignment && v.id != "(" {
+	if !v.NdAssignment && v.NdId != "(" {
 		v.Error(fmt.Sprintf("Bad expression statement (toplevel is %v).", v))
 	}
 	p.skip(";")
@@ -242,7 +242,7 @@ func (p *Parser) statements() *Token {
 	a := []*Token{}
 	var s *Token
 	for {
-		if p.token.id == "}" || p.token.id == "(end)" {
+		if p.token.NdId == "}" || p.token.NdId == "(end)" { // '⌘' for "(end)"?
 			break
 		}
 		s = p.statement()
@@ -256,9 +256,9 @@ func (p *Parser) statements() *Token {
 		return a[0]
 	} else {
 		return &Token{
-			id:    "statements",
-			arity: listArity,
-			list:  a,
+			NdId:    "statements",
+			NdArity: listArity,
+			NdList:  a,
 		}
 	}
 }
@@ -266,7 +266,7 @@ func (p *Parser) statements() *Token {
 func (p *Parser) block() *Token {
 	t := p.token
 	p.skip("{")
-	return t.std(t)
+	return t.TkStd(t)
 }
 
 func itself(this *Token) *Token {
@@ -293,12 +293,12 @@ func (p *Parser) initializeSymbolTable() {
 	//p.constant("Object", {});
 	//p.constant("Array", []);
 
-	p.symbol("(literal)", -1).nud = itself
+	p.symbol("(literal)", -1).TkNud = itself
 
-	p.symbol("this", -1).nud = func(this *Token) *Token {
+	p.symbol("this", -1).TkNud = func(this *Token) *Token {
 		//DEBUG fmt.Printf("this: %v\n", this)
 		p.reserveInScope(this)
-		this.arity = thisArity
+		this.NdArity = thisArity
 		return this
 	}
 
@@ -307,11 +307,11 @@ func (p *Parser) initializeSymbolTable() {
 	p.assignment("-=")
 
 	p.infix("?", 20, func(this, left *Token) *Token {
-		this.first = left
-		this.second = p.expression(0)
+		this.NdFirst = left
+		this.NdSecond = p.expression(0)
 		p.skip(":")
-		this.third = p.expression(0)
-		this.arity = ternaryArity
+		this.NdThird = p.expression(0)
+		this.NdArity = ternaryArity
 		return this
 	})
 
@@ -332,45 +332,45 @@ func (p *Parser) initializeSymbolTable() {
 	p.infix("/", 60, nil)
 
 	p.infix(".", 80, func(this, left *Token) *Token {
-		this.first = left
-		if p.token.arity != nameArity {
+		this.NdFirst = left
+		if p.token.NdArity != nameArity {
 			p.token.Error("Expected a property name.")
 		}
-		p.token.arity = literalArity
-		this.second = p.token
-		this.arity = binaryArity
+		p.token.NdArity = literalArity
+		this.NdSecond = p.token
+		this.NdArity = binaryArity
 		p.advance()
 		return this
 	})
 
 	p.infix("[", 80, func(this, left *Token) *Token {
-		this.first = left
-		this.second = p.expression(0)
-		this.arity = binaryArity
+		this.NdFirst = left
+		this.NdSecond = p.expression(0)
+		this.NdArity = binaryArity
 		p.skip("]")
 		return this
 	})
 
 	p.infix("(", 80, func(this, left *Token) *Token {
-		if left.id == "." || left.id == "[" {
-			this.arity = ternaryArity
-			this.first = left.first
-			this.second = left.second
+		if left.NdId == "." || left.NdId == "[" {
+			this.NdArity = ternaryArity
+			this.NdFirst = left.NdFirst
+			this.NdSecond = left.NdSecond
 		} else {
-			this.arity = binaryArity
-			this.first = left
-			if (left.arity != unaryArity || left.id != "function") &&
-				left.arity != nameArity && left.id != "(" &&
-				left.id != "&&" && left.id != "||" &&
-				left.id != "?" {
+			this.NdArity = binaryArity
+			this.NdFirst = left
+			if (left.NdArity != unaryArity || left.NdId != "function") && //  'ƒ' for "function"?
+				left.NdArity != nameArity && left.NdId != "(" &&
+				left.NdId != "&&" && left.NdId != "||" && // '∧' for "&&" and '∨' for "||"?
+				left.NdId != "?" {
 				left.Error("Expected a variable name.")
 			}
 		}
-		this.list = []*Token{}
-		if p.token.id != ")" {
+		this.NdList = []*Token{}
+		if p.token.NdId != ")" {
 			for {
-				this.list = append(this.list, p.expression(0))
-				if p.token.id != "," {
+				this.NdList = append(this.NdList, p.expression(0))
+				if p.token.NdId != "," {
 					break
 				}
 				p.skip(",")
@@ -394,78 +394,78 @@ func (p *Parser) initializeSymbolTable() {
 		// fmt.Printf("consumed `function`; current token is %v\n", p.token)
 		a := []*Token{}
 		p.newScope()
-		if p.token.arity == nameArity {
+		if p.token.NdArity == nameArity {
 			p.scope.define(p.token)
-			this.name = p.token.Value
+			this.NdName = p.token.TkValue
 			// fmt.Printf("after `function`, consumed name %v\n", p.token)
 			p.advance()
 		}
 		// fmt.Printf("after `function [name]`, looking for `('; current token is  %v\n", p.token)
 		p.skip("(")
-		if p.token.id != ")" {
+		if p.token.NdId != ")" {
 			for {
-				if p.token.arity != nameArity {
+				if p.token.NdArity != nameArity {
 					p.token.Error("Expected a parameter name.")
 				}
 				p.scope.define(p.token)
 				a = append(a, p.token)
 				p.advance()
-				if p.token.id != "," {
+				if p.token.NdId != "," {
 					break
 				}
 				p.skip(",")
 			}
 		}
-		this.list = a
+		this.NdList = a
 		p.skip(")")
 		p.skip("{")
-		this.second = p.statements()
+		this.NdSecond = p.statements()
 		p.skip("}")
-		this.arity = functionArity
+		this.NdArity = functionArity
 		p.popScope()
 		return this
 	})
 
 	p.prefix("[", func(this *Token) *Token {
 		a := []*Token{}
-		if p.token.id != "]" {
+		if p.token.NdId != "]" {
 			for {
 				a = append(a, p.expression(0))
-				if p.token.id != "," {
+				if p.token.NdId != "," {
 					break
 				}
 				p.skip(",")
 			}
 		}
 		p.skip("]")
-		this.list = a
-		this.arity = unaryArity
+		this.NdList = a
+		this.NdArity = unaryArity
 		return this
 	})
 
 	p.prefix("{", func(this *Token) *Token {
 		a := []*Token{}
 		var n, v *Token
-		if p.token.id != "}" {
+		if p.token.NdId != "}" {
 			for {
 				n = p.token
-				if n.arity != nameArity && n.arity != literalArity {
+				if n.NdArity != nameArity && n.NdArity != literalArity {
 					p.token.Error("Bad property name.")
 				}
 				p.advance()
 				p.skip(":")
 				v = p.expression(0)
-				v.key = n.Value
+				v.NdKey = n.TkValue
 				a = append(a, v)
-				if p.token.id != "," {
+				if p.token.NdId != "," {
 					break
 				}
 				p.skip(",")
 			}
 		}
 		p.skip("}")
-		this.list = a
-		this.arity = unaryArity
+		this.NdList = a
+		this.NdArity = unaryArity
 		return this
 	})
 
@@ -482,20 +482,20 @@ func (p *Parser) initializeSymbolTable() {
 		var n, t *Token
 		for {
 			n = p.token
-			if n.arity != nameArity {
+			if n.NdArity != nameArity {
 				n.Error("Expected a new variable name.")
 			}
 			p.scope.define(n)
 			p.advance()
-			if p.token.id == "=" {
+			if p.token.NdId == "=" {
 				t = p.token
 				p.skip("=")
-				t.first = n
-				t.second = p.expression(0)
-				t.arity = binaryArity
+				t.NdFirst = n
+				t.NdSecond = p.expression(0)
+				t.NdArity = binaryArity
 				a = append(a, t)
 			}
-			if p.token.id != "," {
+			if p.token.NdId != "," {
 				break
 			}
 			p.skip(",")
@@ -507,60 +507,60 @@ func (p *Parser) initializeSymbolTable() {
 			return a[0]
 		} else {
 			return &Token{
-				id:    "let",
-				arity: listArity,
-				list:  a,
+				NdId:    "let",
+				NdArity: listArity,
+				NdList:  a,
 			}
 		}
 	})
 
 	p.stmt("if", func(this *Token) *Token {
 		p.skip("(")
-		this.first = p.expression(0)
+		this.NdFirst = p.expression(0)
 		p.skip(")")
-		this.second = p.block()
-		if p.token.id == "else" {
+		this.NdSecond = p.block()
+		if p.token.NdId == "else" { //  '𝕖' for "else"?
 			p.reserveInScope(p.token)
 			p.skip("else")
-			if p.token.id == "if" {
-				this.third = p.statement()
+			if p.token.NdId == "if" { // '𝕚' for "if"?
+				this.NdThird = p.statement()
 			} else {
-				this.third = p.block()
+				this.NdThird = p.block()
 			}
 		} else {
-			this.third = nil
+			this.NdThird = nil
 		}
-		this.arity = statementArity
+		this.NdArity = statementArity
 		return this
 	})
 
 	p.stmt("return", func(this *Token) *Token {
-		if p.token.id != ";" {
-			this.first = p.expression(0)
+		if p.token.NdId != ";" {
+			this.NdFirst = p.expression(0)
 		}
 		p.skip(";")
-		if p.token.id != "}" {
+		if p.token.NdId != "}" {
 			p.token.Error("Unreachable statement.")
 		}
-		this.arity = statementArity
+		this.NdArity = statementArity
 		return this
 	})
 
 	p.stmt("break", func(this *Token) *Token {
 		p.skip(";")
-		if p.token.id != "}" {
+		if p.token.NdId != "}" {
 			p.token.Error("Unreachable statement.")
 		}
-		this.arity = statementArity
+		this.NdArity = statementArity
 		return this
 	})
 
 	p.stmt("while", func(this *Token) *Token {
 		p.skip("(")
-		this.first = p.expression(0)
+		this.NdFirst = p.expression(0)
 		p.skip(")")
-		this.second = p.block()
-		this.arity = statementArity
+		this.NdSecond = p.block()
+		this.NdArity = statementArity
 		return this
 	})
 }

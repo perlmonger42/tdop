@@ -32,7 +32,7 @@ func writer() *tabwriter.Writer {
 func main() {
 	w := writer()
 	for i, token := range scan.TokenizeString("Hello, world!\n") {
-		fmt.Fprintf(w, "%d:\t %s \t %q \t\n", i, token.Type, token.Value)
+		fmt.Fprintf(w, "%d:\t %s \t %q \t\n", i, token.TkType, token.TkValue)
 	}
 	w.Flush()
 

@@ -78,26 +78,27 @@ type BinaryDenotation func(this, left *Token) *Token
 
 // Token represents a lexical unit returned from the scanner.
 type Token struct {
-	Type   Type   // The type of this item.
-	Value  string // The text of this item.
-	Line   int    // The line number on which this token appears
-	Column int    // The column number at which this token appears
+	TkType     Type   // The type of this item.
+	TkValue    string // The text of this item.
+	TkLine     int    // The line number on which this token appears
+	TkColumn   int    // The column number at which this token appears
+	TkReserved bool
 
-	id       string
-	arity    Type /*Arity*/
-	reserved bool
-	nud      UnaryDenotation
-	led      BinaryDenotation
-	std      UnaryDenotation
-	lbp      int
+	TkNud UnaryDenotation
+	TkLed BinaryDenotation
+	TkStd UnaryDenotation
+	TkLbp int
 
-	assignment bool
-	first      *Token
-	second     *Token
-	third      *Token
-	list       []*Token
-	name       string
-	key        string
+	NdId    string
+	NdArity Type /*Arity*/
+
+	NdAssignment bool
+	NdFirst      *Token
+	NdSecond     *Token
+	NdThird      *Token
+	NdList       []*Token
+	NdName       string
+	NdKey        string
 }
 
 func (t *Token) Error(message string) {
@@ -106,40 +107,40 @@ func (t *Token) Error(message string) {
 
 func (t *Token) PrettyPrint(b io.Writer, indent string) {
 	fmt.Fprintf(b, "%s%s(%s %q)@%d:%d",
-		indent, t.Type, t.arity, t.Value, t.Line, t.Column)
-	if t.id != "" {
-		fmt.Fprintf(b, "[id %s]", t.id)
+		indent, t.TkType, t.NdArity, t.TkValue, t.TkLine, t.TkColumn)
+	if t.NdId != "" { // '∅'
+		fmt.Fprintf(b, "[id %s]", t.NdId)
 	}
-	if t.reserved {
+	if t.TkReserved {
 		fmt.Fprintf(b, " reserved")
 	}
-	if t.assignment {
+	if t.NdAssignment {
 		fmt.Fprintf(b, " assignment")
 	}
-	if t.name != "" {
-		fmt.Fprintf(b, " name:%q", t.name)
+	if t.NdName != "" {
+		fmt.Fprintf(b, " name:%q", t.NdName)
 	}
-	if t.key != "" {
-		fmt.Fprintf(b, " key:%q", t.key)
+	if t.NdKey != "" {
+		fmt.Fprintf(b, " key:%q", t.NdKey)
 	}
-	//	if t.list == nil || len(t.list) == 0 {
-	//		fmt.Fprintf(b, " list:empty")
+	//	if t.NdList == nil || len(t.NdList) == 0 {
+	//		fmt.Fprintf(b, " NdList:empty")
 	//	}
 	fmt.Fprintf(b, "\n")
 	indented := indent + "  "
-	if t.first != nil {
-		t.first.PrettyPrint(b, indented)
+	if t.NdFirst != nil {
+		t.NdFirst.PrettyPrint(b, indented)
 	}
-	if t.second != nil {
-		t.second.PrettyPrint(b, indented)
+	if t.NdSecond != nil {
+		t.NdSecond.PrettyPrint(b, indented)
 	}
-	if t.third != nil {
-		t.third.PrettyPrint(b, indented)
+	if t.NdThird != nil {
+		t.NdThird.PrettyPrint(b, indented)
 	}
-	if t.list != nil && len(t.list) > 0 {
+	if t.NdList != nil && len(t.NdList) > 0 {
 		fmt.Fprintf(b, "%slist:\n", indented)
 		indented += "  "
-		for _, item := range t.list {
+		for _, item := range t.NdList {
 			item.PrettyPrint(b, indented)
 		}
 	}
@@ -171,11 +172,10 @@ func TokenizeLines(sourceLines []string) []*Token {
 		first := loc[locIndex]
 		after := loc[locIndex+1]
 		result = append(result, &Token{
-			Type:   t,
-			Value:  linevalue[first:after],
-			Line:   lineNumber + 1,
-			Column: first,
-			id:     linevalue[first:after],
+			TkType:   t,
+			TkValue:  linevalue[first:after],
+			TkLine:   lineNumber + 1,
+			TkColumn: first,
 		})
 	}
 	for lineNumber, linevalue = range sourceLines {

@@ -8,19 +8,19 @@ type Scope struct {
 }
 
 func (s *Scope) define(n *Token) {
-	if t, ok := s.def[n.Value]; ok {
-		if t.reserved {
+	if t, ok := s.def[n.TkValue]; ok {
+		if t.TkReserved {
 			n.Error("Already reserved")
 		} else {
 			n.Error("Already defined")
 		}
 	}
-	s.def[n.Value] = n
-	n.reserved = false
-	n.nud = itself
-	n.led = nil
-	n.std = nil
-	n.lbp = 0
+	s.def[n.TkValue] = n
+	n.TkReserved = false
+	n.TkNud = itself
+	n.TkLed = nil
+	n.TkStd = nil
+	n.TkLbp = 0
 }
 
 func (s *Scope) find(name string) *Token {
@@ -35,17 +35,17 @@ func (s *Scope) find(name string) *Token {
 }
 
 func (s *Scope) reserve(n *Token) {
-	if n.arity != nameArity || n.reserved {
+	if n.NdArity != nameArity || n.TkReserved {
 		return
 	}
-	if t, ok := s.def[n.Value]; ok {
-		if t.reserved {
+	if t, ok := s.def[n.TkValue]; ok {
+		if t.TkReserved {
 			return
 		}
-		if t.arity == nameArity {
+		if t.NdArity == nameArity {
 			n.Error("Already defined")
 		}
 	}
-	s.def[n.Value] = n
-	n.reserved = true
+	s.def[n.TkValue] = n
+	n.TkReserved = true
 }

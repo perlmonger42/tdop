@@ -106,12 +106,12 @@ func checkTestcase(t *testing.T, c *testcase) {
 			continue
 		}
 		w := c.output[i]
-		if token.Type != w.Type || token.Value != w.Value {
+		if token.TkType != w.Type || token.TkValue != w.Value {
 			if len(reportInput) > 0 {
 				t.Errorf("%s", reportInput)
 			}
 			t.Errorf("  token %d: wanted {%v,%q}, got {%v,%q}",
-				i, w.Type, w.Value, token.Type, token.Value)
+				i, w.Type, w.Value, token.TkType, token.TkValue)
 			reportInput = ""
 		}
 	}

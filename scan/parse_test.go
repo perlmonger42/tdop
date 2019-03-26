@@ -20,8 +20,14 @@ func TestLet(t *testing.T) {
 	defer recoverFromPanic(t)
 	source := "let answer = 42;"
 	tree := parseString(source)
-	if tree.Type != Punctuator || tree.Value != "=" || tree.assignment {
+	if tree.TkType != Punctuator || tree.TkValue != "=" || tree.NdAssignment {
 		t.Errorf("expected assignment; got %v\n", tree)
+	}
+	if tree.NdFirst.NdArity != nameArity || tree.NdFirst.TkValue != "answer" {
+		t.Errorf("expected lhs to be `answer`; got %v", tree.NdFirst)
+	}
+	if tree.NdSecond.TkType != Literal || tree.NdSecond.TkValue != "42" {
+		t.Errorf("expected lhs to be `42`; got %v", tree.NdSecond)
 	}
 }
 
@@ -29,7 +35,7 @@ func TestExpression(t *testing.T) {
 	defer recoverFromPanic(t)
 	source := "let x;\nx = 1+2*3/(4-5);"
 	tree := parseString(source)
-	if tree.Type != Punctuator || tree.Value != "=" || !tree.assignment {
+	if tree.TkType != Punctuator || tree.TkValue != "=" || !tree.NdAssignment {
 		t.Errorf("expected assignment; got %v\n", tree)
 	}
 }
@@ -38,14 +44,14 @@ func TestFuncDef(t *testing.T) {
 	defer recoverFromPanic(t)
 	source := "let f = function (){};"
 	tree := parseString(source)
-	if tree.Type != Punctuator || tree.Value != "=" || tree.assignment {
+	if tree.TkType != Punctuator || tree.TkValue != "=" || tree.NdAssignment {
 		t.Errorf("expected initialization; got %v\n", tree)
 	}
-	if tree.first.Type != Name {
-		t.Errorf("expected Name `f`; got %v\n", tree.first.Type)
+	if tree.NdFirst.TkType != Name {
+		t.Errorf("expected Name `f`; got %v\n", tree.NdFirst.TkType)
 	}
-	if tree.second.id != "function" {
-		t.Errorf("expected `function` after `f`; got %v\n", tree.second.Type)
+	if tree.NdSecond.NdId != "function" {
+		t.Errorf("expected `function` after `f`; got %v\n", tree.NdSecond.TkType)
 	}
 }
 
@@ -53,7 +59,7 @@ func TestAssignment(t *testing.T) {
 	defer recoverFromPanic(t)
 	source := "{\nlet answer;\nanswer = 42;\n}"
 	tree := parseString(source)
-	if tree.Type != Punctuator || tree.Value != "=" || !tree.assignment {
+	if tree.TkType != Punctuator || tree.TkValue != "=" || !tree.NdAssignment {
 		t.Errorf("expected assignment; got %v\n", tree)
 	}
 }
@@ -63,10 +69,10 @@ func TestBlock(t *testing.T) {
 	source := `let token, advance, block = function () {
         let t = token;
         advance("{");
-        return t.std();
+        return t.TkStd();
     };`
 	tree := parseString(source)
-	if tree.Type != Punctuator || tree.Value != "=" || tree.assignment {
+	if tree.TkType != Punctuator || tree.TkValue != "=" || tree.NdAssignment {
 		t.Errorf("expected assignment; got %v\n", tree)
 	}
 
@@ -95,30 +101,30 @@ func TestIf(t *testing.T) {
 	defer recoverFromPanic(t)
 	source := `let x, y, z; if (x) { y(); } else { z(); }`
 	tree := parseString(source)
-	if tree.Type != Name || tree.arity != statementArity || tree.Value != "if" {
+	if tree.TkType != Name || tree.NdArity != statementArity || tree.TkValue != "if" {
 		t.Errorf("expected if-stmt; got %v\n", tree)
 	}
 
-	a := tree.first
-	if a.Type != Name || a.arity != nameArity || a.Value != "x" {
+	a := tree.NdFirst
+	if a.TkType != Name || a.NdArity != nameArity || a.TkValue != "x" {
 		t.Errorf("expected if's test to be `x`; got %v", a)
 	}
 
-	a = tree.second
-	if a.arity != binaryArity || a.Value != "(" {
+	a = tree.NdSecond
+	if a.NdArity != binaryArity || a.TkValue != "(" {
 		t.Errorf("expected if's consequent to be funcall; got %v", a)
 	}
-	b := a.first
-	if b.arity != nameArity || b.Value != "y" {
+	b := a.NdFirst
+	if b.NdArity != nameArity || b.TkValue != "y" {
 		t.Errorf("expected if's consequent to be 'y()'; got %v", a)
 	}
 
-	a = tree.third
-	if a.arity != binaryArity || a.Value != "(" {
+	a = tree.NdThird
+	if a.NdArity != binaryArity || a.TkValue != "(" {
 		t.Errorf("expected if's alternative to be funcall; got %v", a)
 	}
-	b = a.first
-	if b.arity != nameArity || b.Value != "z" {
+	b = a.NdFirst
+	if b.NdArity != nameArity || b.TkValue != "z" {
 		t.Errorf("expected if's alternative to be 'z()'; got %v", a)
 	}
 }
