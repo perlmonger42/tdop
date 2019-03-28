@@ -8,7 +8,7 @@ import (
 	"github.com/perlmonger42/tdop/scan"
 )
 
-func parseString(source string) *scan.Token {
+func parseString(source string) scan.AST {
 	parser := scan.NewParser()
 	tokens := scan.TokenizeString(source)
 	return parser.Parse(tokens)

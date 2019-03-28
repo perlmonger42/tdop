@@ -73,8 +73,8 @@ var tokenRegex = regexp.MustCompile(
 		"|"),
 )
 
-type UnaryDenotation func(this *Token) *Token
-type BinaryDenotation func(this, left *Token) *Token
+type UnaryDenotation func(this *Token) AST
+type BinaryDenotation func(this *Token, left AST) AST
 
 // Token represents a lexical unit returned from the scanner.
 type Token struct {
@@ -93,16 +93,23 @@ type Token struct {
 	NdArity Type /*Arity*/
 
 	NdAssignment bool
-	NdFirst      *Token
-	NdSecond     *Token
-	NdThird      *Token
-	NdList       []*Token
+	NdFirst      AST
+	NdSecond     AST
+	NdThird      AST
+	NdList       []AST
 	NdName       string
 	NdKey        string
 }
 
 func (t *Token) Error(message string) {
 	panic(fmt.Sprintf("SyntaxError;  %s while processing %v", message, t))
+}
+
+func (t *Token) IsAssignment() bool {
+	return t.NdId == "="
+}
+func (t *Token) IsFuncall() bool {
+	return t.NdId == "("
 }
 
 func (t *Token) PrettyPrint(b io.Writer, indent string) {

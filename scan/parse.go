@@ -1,6 +1,111 @@
 package scan
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type AST interface {
+	Error(message string)
+	String() string
+	PrettyPrint(b io.Writer, indent string)
+	IsFuncall() bool
+	IsAssignment() bool
+}
+
+type ASTimpl struct {
+	token        *Token
+	op           string
+	first        AST
+	second       AST
+	third        AST
+	list         []AST
+	isAssignment bool
+	isFuncall    bool
+}
+
+func (t *ASTimpl) Error(message string) {
+	panic(fmt.Sprintf("SyntaxError;  %s while processing %v", message, t))
+}
+
+func TokenAST(t *Token) AST {
+	return &ASTimpl{token: t,
+		isAssignment: t.IsAssignment(),
+		isFuncall:    t.IsFuncall(),
+	}
+}
+
+func NewAST0(op string) AST {
+	return &ASTimpl{op: op}
+}
+
+func NewAST1(op string, p AST) AST {
+	return &ASTimpl{op: op, first: p}
+}
+
+func NewAST2(op string, p, q AST) AST {
+	return &ASTimpl{op: op, first: p, second: q}
+}
+func NewAST3(op string, p, q, r AST) AST {
+	return &ASTimpl{op: op, first: p, second: q, third: r}
+}
+
+func (t *ASTimpl) IsAssignment() bool {
+	return t.isAssignment || t.token != nil && t.IsAssignment()
+}
+
+func (t *ASTimpl) IsFuncall() bool {
+	return t.isFuncall || t.token != nil && t.IsFuncall()
+}
+
+func (t *ASTimpl) PrettyPrint(b io.Writer, indent string) {
+	if t.token != nil {
+		t.token.PrettyPrint(b, indent)
+		return
+	}
+
+	assignment := ""
+	if t.isAssignment {
+		assignment = " assignment"
+	}
+	if t.first == nil && t.second == nil && t.third == nil && t.list == nil {
+		fmt.Fprintf(b, "%#q%s", t.op, assignment)
+		return
+	}
+
+	indented := indent + "  "
+	fmt.Fprintf(b, "(%#q%s ", t.op, assignment)
+	if t.first != nil {
+		t.first.PrettyPrint(b, indented)
+	}
+	if t.second != nil {
+		fmt.Fprintf(b, ",\n%s", indented)
+		t.second.PrettyPrint(b, indented)
+	}
+	if t.third != nil {
+		fmt.Fprintf(b, ",\n%s", indented)
+		t.third.PrettyPrint(b, indented)
+	}
+	if t.list != nil {
+		fmt.Fprintf(b, ", [")
+		indented2 := indented + "  "
+		comma := ""
+		for _, v := range t.list {
+			fmt.Fprintf(b, "%s\n%s", comma, indented2)
+			v.PrettyPrint(b, indented2)
+			comma = ","
+		}
+		fmt.Fprintf(b, "]")
+	}
+	fmt.Fprintf(b, ")")
+}
+
+func (t *ASTimpl) String() string {
+	var s strings.Builder
+	t.PrettyPrint(&s, "")
+	return s.String()
+}
 
 type Parser struct {
 	// actually, this is more of a parse_table,
@@ -19,7 +124,7 @@ func NewParser() (p *Parser) {
 	return
 }
 
-func (p *Parser) Parse(array_of_tokens []*Token) *Token {
+func (p *Parser) Parse(array_of_tokens []*Token) AST {
 	p.tokens = array_of_tokens
 	p.tokenNumber = 0
 	p.newScope()
@@ -67,10 +172,14 @@ func (p *Parser) symbol(name string, bp int) *Token {
 			NdId:    name,
 			TkValue: name,
 			TkLbp:   bp,
-			TkNud:   func(this *Token) *Token { this.Error("Undefined"); return this },
-			TkLed: func(this, left *Token) *Token {
+			TkNud: func(this *Token) AST {
+				this.Error("Undefined")
+				return NewAST0(name)
+			},
+			TkLed: func(this *Token, left AST) AST {
 				this.Error(fmt.Sprintf("Missing operator; left: %v", left))
-				return this
+				panic("can't, yeah?")
+				return TokenAST(this)
 			},
 		}
 		p.symbol_table[name] = s
@@ -80,12 +189,12 @@ func (p *Parser) symbol(name string, bp int) *Token {
 
 func (p *Parser) constant(s string, v string) *Token {
 	x := p.symbol(s, -1)
-	x.TkNud = func(this *Token) *Token {
+	x.TkNud = func(this *Token) AST {
 		//DEBUG fmt.Printf("constant %s: %v\n", v, this)
 		p.reserveInScope(this)
 		this.TkValue = p.symbol_table[this.NdId].TkValue
 		this.NdArity = literalArity
-		return this
+		return NewAST1(s, NewAST0(v))
 	}
 	x.TkValue = v
 	return x
@@ -95,13 +204,13 @@ func (p *Parser) infix(id string, bp int, led BinaryDenotation) *Token {
 	s := p.symbol(id, bp)
 	s.TkLed = led
 	if led == nil {
-		s.TkLed = func(this, left *Token) *Token {
+		s.TkLed = func(this *Token, left AST) AST {
 			this.NdFirst = left
 			//DEBUG fmt.Printf("infix after NdFirst: %v\n", this)
 			this.NdSecond = p.expression(bp)
 			this.NdArity = binaryArity
 			//DEBUG fmt.Printf("infix after NdSecond: %v\n", this)
-			return this
+			return NewAST2(id+" left associative", this.NdFirst, this.NdSecond)
 		}
 	}
 	return s
@@ -111,13 +220,13 @@ func (p *Parser) infixr(id string, bp int, led BinaryDenotation) *Token {
 	s := p.symbol(id, bp)
 	s.TkLed = led
 	if led == nil {
-		s.TkLed = func(this, left *Token) *Token {
+		s.TkLed = func(this *Token, left AST) AST {
 			this.NdFirst = left
 			//DEBUG fmt.Printf("infixr after NdFirst: %v\n", this)
 			this.NdSecond = p.expression(bp - 1)
 			this.NdArity = binaryArity
 			//DEBUG fmt.Printf("infixr after NdSecond: %v\n", this)
-			return this
+			return NewAST2(id+" right associative", this.NdFirst, this.NdSecond)
 		}
 	}
 	return s
@@ -128,17 +237,23 @@ func possibleLvalue(x *Token) bool {
 }
 
 func (p *Parser) assignment(id string) *Token {
-	return p.infixr(id, 10, func(this, left *Token) *Token {
+	return p.infixr(id, 10, func(this *Token, left AST) AST {
 		//DEBUG fmt.Printf("assignment after NdFirst: %v\n", this)
-		if !possibleLvalue(left) {
-			left.Error("Bad lvalue.")
-		}
+		//		if !possibleLvalue(left) {
+		//			left.Error("Bad lvalue.")
+		//		}
+		// TODO: re-instate the code above once Token/AST changeover is complete
 		this.NdFirst = left
 		this.NdSecond = p.expression(9)
 		this.NdAssignment = true
 		this.NdArity = binaryArity
 		//DEBUG fmt.Printf("assignment after NdSecond: %v\n", this)
-		return this
+		return &ASTimpl{
+			op:           id,
+			first:        left,
+			second:       this.NdSecond,
+			isAssignment: true,
+		}
 	})
 }
 
@@ -146,13 +261,13 @@ func (p *Parser) prefix(id string, nud UnaryDenotation) *Token {
 	s := p.symbol(id, -1)
 	s.TkNud = nud
 	if nud == nil {
-		s.TkNud = func(this *Token) *Token {
+		s.TkNud = func(this *Token) AST {
 			//DEBUG fmt.Printf("prefix before NdFirst: %v\n", this)
 			p.reserveInScope(this)
 			this.NdFirst = p.expression(70)
 			this.NdArity = unaryArity
 			//DEBUG fmt.Printf("prefix after NdFirst: %v\n", this)
-			return this
+			return NewAST1(id+" prefix", this.NdFirst)
 		}
 	}
 	return s
@@ -203,7 +318,7 @@ func (p *Parser) advance() {
 	//fmt.Printf("next token: %v\n", p.token)
 }
 
-func (p *Parser) expression(rbp int) *Token {
+func (p *Parser) expression(rbp int) AST {
 	t := p.token
 	p.advance()
 	if t == nil {
@@ -211,7 +326,8 @@ func (p *Parser) expression(rbp int) *Token {
 	}
 	if t.TkNud == nil {
 		panic(fmt.Sprintf("expression: nil nud for %s", t))
-		return t
+		panic("can't, yeah?")
+		return TokenAST(t)
 	}
 	left := t.TkNud(t)
 	for rbp < p.token.TkLbp {
@@ -222,7 +338,7 @@ func (p *Parser) expression(rbp int) *Token {
 	return left
 }
 
-func (p *Parser) statement() *Token {
+func (p *Parser) statement() AST {
 	n := p.token
 
 	if n.TkStd != nil {
@@ -231,16 +347,16 @@ func (p *Parser) statement() *Token {
 		return n.TkStd(n)
 	}
 	v := p.expression(0)
-	if !v.NdAssignment && v.NdId != "(" {
+	if !v.IsAssignment() && v.IsFuncall() {
 		v.Error(fmt.Sprintf("Bad expression statement (toplevel is %v).", v))
 	}
 	p.skip(";")
 	return v
 }
 
-func (p *Parser) statements() *Token {
-	a := []*Token{}
-	var s *Token
+func (p *Parser) statements() AST {
+	a := []AST{}
+	var s AST
 	for {
 		if p.token.NdId == "}" || p.token.NdId == "(end)" { // '⌘' for "(end)"?
 			break
@@ -255,23 +371,24 @@ func (p *Parser) statements() *Token {
 	} else if len(a) == 1 {
 		return a[0]
 	} else {
-		return &Token{
-			NdId:    "statements",
-			NdArity: listArity,
-			NdList:  a,
-		}
+		return &ASTimpl{op: "statements", list: a}
+		//return &Token{
+		//	NdId:    "statements",
+		//	NdArity: listArity,
+		//	NdList:  a,
+		//}
 	}
 }
 
-func (p *Parser) block() *Token {
+func (p *Parser) block() AST {
 	t := p.token
 	p.skip("{")
 	return t.TkStd(t)
 }
 
-func itself(this *Token) *Token {
+func itself(this *Token) AST {
 	//DEBUG fmt.Printf("itself: %v\n", this)
-	return this
+	return &ASTimpl{token: this}
 }
 
 func (p *Parser) initializeSymbolTable() {
@@ -295,24 +412,24 @@ func (p *Parser) initializeSymbolTable() {
 
 	p.symbol("(literal)", -1).TkNud = itself
 
-	p.symbol("this", -1).TkNud = func(this *Token) *Token {
+	p.symbol("this", -1).TkNud = func(this *Token) AST {
 		//DEBUG fmt.Printf("this: %v\n", this)
 		p.reserveInScope(this)
 		this.NdArity = thisArity
-		return this
+		return NewAST0("this")
 	}
 
 	p.assignment("=")
 	p.assignment("+=")
 	p.assignment("-=")
 
-	p.infix("?", 20, func(this, left *Token) *Token {
+	p.infix("?", 20, func(this *Token, left AST) AST {
 		this.NdFirst = left
 		this.NdSecond = p.expression(0)
 		p.skip(":")
 		this.NdThird = p.expression(0)
 		this.NdArity = ternaryArity
-		return this
+		return NewAST3("?:", this.NdFirst, this.NdSecond, this.NdThird)
 	})
 
 	p.infixr("&&", 30, nil)
@@ -331,42 +448,42 @@ func (p *Parser) initializeSymbolTable() {
 	p.infix("*", 60, nil)
 	p.infix("/", 60, nil)
 
-	p.infix(".", 80, func(this, left *Token) *Token {
+	p.infix(".", 80, func(this *Token, left AST) AST {
 		this.NdFirst = left
 		if p.token.NdArity != nameArity {
 			p.token.Error("Expected a property name.")
 		}
 		p.token.NdArity = literalArity
-		this.NdSecond = p.token
+		this.NdSecond = NewAST1("fieldname", NewAST0(p.token.TkValue))
 		this.NdArity = binaryArity
 		p.advance()
-		return this
+		return NewAST2(".", this.NdFirst, this.NdSecond)
 	})
 
-	p.infix("[", 80, func(this, left *Token) *Token {
+	p.infix("[", 80, func(this *Token, left AST) AST {
 		this.NdFirst = left
 		this.NdSecond = p.expression(0)
 		this.NdArity = binaryArity
 		p.skip("]")
-		return this
+		return NewAST2("a[i]", this.NdFirst, this.NdSecond)
 	})
 
-	p.infix("(", 80, func(this, left *Token) *Token {
-		if left.NdId == "." || left.NdId == "[" {
-			this.NdArity = ternaryArity
-			this.NdFirst = left.NdFirst
-			this.NdSecond = left.NdSecond
-		} else {
-			this.NdArity = binaryArity
-			this.NdFirst = left
-			if (left.NdArity != unaryArity || left.NdId != "function") && //  'ƒ' for "function"?
-				left.NdArity != nameArity && left.NdId != "(" &&
-				left.NdId != "&&" && left.NdId != "||" && // '∧' for "&&" and '∨' for "||"?
-				left.NdId != "?" {
-				left.Error("Expected a variable name.")
-			}
-		}
-		this.NdList = []*Token{}
+	p.infix("(", 80, func(this *Token, left AST) AST {
+		//if left.NdId == "." || left.NdId == "[" {
+		//	this.NdArity = ternaryArity
+		//	this.NdFirst = left.first
+		//	this.NdSecond = left.second
+		//} else {
+		this.NdArity = binaryArity
+		this.NdFirst = left
+		//if (left.NdArity != unaryArity || left.NdId != "function") && //  'ƒ' for "function"?
+		//	left.NdArity != nameArity && left.NdId != "(" &&
+		//	left.NdId != "&&" && left.NdId != "||" && // '∧' for "&&" and '∨' for "||"?
+		//	left.NdId != "?" {
+		//	left.Error("Expected a variable name.")
+		//} TODO: re-instate this check
+		//} TODO: re-instate this binary/ternary distinction
+		this.NdList = []AST{}
 		if p.token.NdId != ")" {
 			for {
 				this.NdList = append(this.NdList, p.expression(0))
@@ -377,22 +494,27 @@ func (p *Parser) initializeSymbolTable() {
 			}
 		}
 		p.skip(")")
-		return this
+		return &ASTimpl{
+			op:        "funcall",
+			first:     this.NdFirst,
+			list:      this.NdList,
+			isFuncall: true,
+		}
 	})
 
 	p.prefix("!", nil)
 	p.prefix("-", nil)
 	p.prefix("typeof", nil)
 
-	p.prefix("(", func(this *Token) *Token {
+	p.prefix("(", func(this *Token) AST {
 		e := p.expression(0)
 		p.skip(")")
 		return e
 	})
 
-	p.prefix("function", func(this *Token) *Token {
+	p.prefix("function", func(this *Token) AST {
 		// fmt.Printf("consumed `function`; current token is %v\n", p.token)
-		a := []*Token{}
+		a := []AST{}
 		p.newScope()
 		if p.token.NdArity == nameArity {
 			p.scope.define(p.token)
@@ -408,7 +530,7 @@ func (p *Parser) initializeSymbolTable() {
 					p.token.Error("Expected a parameter name.")
 				}
 				p.scope.define(p.token)
-				a = append(a, p.token)
+				a = append(a, NewAST0(p.token.TkValue))
 				p.advance()
 				if p.token.NdId != "," {
 					break
@@ -423,11 +545,16 @@ func (p *Parser) initializeSymbolTable() {
 		p.skip("}")
 		this.NdArity = functionArity
 		p.popScope()
-		return this
+		return &ASTimpl{
+			op:     "defun",
+			first:  NewAST0(this.NdName),
+			second: this.NdSecond,
+			list:   a,
+		}
 	})
 
-	p.prefix("[", func(this *Token) *Token {
-		a := []*Token{}
+	p.prefix("[", func(this *Token) AST {
+		a := []AST{}
 		if p.token.NdId != "]" {
 			for {
 				a = append(a, p.expression(0))
@@ -440,36 +567,37 @@ func (p *Parser) initializeSymbolTable() {
 		p.skip("]")
 		this.NdList = a
 		this.NdArity = unaryArity
-		return this
+		return &ASTimpl{op: "[...]", list: this.NdList}
 	})
 
-	p.prefix("{", func(this *Token) *Token {
-		a := []*Token{}
-		var n, v *Token
-		if p.token.NdId != "}" {
-			for {
-				n = p.token
-				if n.NdArity != nameArity && n.NdArity != literalArity {
-					p.token.Error("Bad property name.")
-				}
-				p.advance()
-				p.skip(":")
-				v = p.expression(0)
-				v.NdKey = n.TkValue
-				a = append(a, v)
-				if p.token.NdId != "," {
-					break
-				}
-				p.skip(",")
-			}
-		}
-		p.skip("}")
-		this.NdList = a
-		this.NdArity = unaryArity
-		return this
-	})
+	//p.prefix("{", func(this *Token) AST {
+	//	a := []AST{}
+	//	var n *Token
+	//	var v AST
+	//	if p.token.NdId != "}" {
+	//		for {
+	//			n = p.token
+	//			if n.NdArity != nameArity && n.NdArity != literalArity {
+	//				p.token.Error("Bad property name.")
+	//			}
+	//			p.advance()
+	//			p.skip(":")
+	//			v = p.expression(0)
+	//			v.NdKey = n.TkValue
+	//			a = append(a, v)
+	//			if p.token.NdId != "," {
+	//				break
+	//			}
+	//			p.skip(",")
+	//		}
+	//	}
+	//	p.skip("}")
+	//	this.NdList = a
+	//	this.NdArity = unaryArity
+	//	return this
+	//}) TODO: re-instate {...} constructor
 
-	p.stmt("{", func(this *Token) *Token {
+	p.stmt("{", func(this *Token) AST {
 		p.newScope()
 		a := p.statements()
 		p.skip("}")
@@ -477,8 +605,8 @@ func (p *Parser) initializeSymbolTable() {
 		return a
 	})
 
-	p.stmt("let", func(this *Token) *Token {
-		a := []*Token{}
+	p.stmt("let", func(this *Token) AST {
+		a := []AST{}
 		var n, t *Token
 		for {
 			n = p.token
@@ -490,10 +618,10 @@ func (p *Parser) initializeSymbolTable() {
 			if p.token.NdId == "=" {
 				t = p.token
 				p.skip("=")
-				t.NdFirst = n
+				t.NdFirst = NewAST0(n.TkValue)
 				t.NdSecond = p.expression(0)
 				t.NdArity = binaryArity
-				a = append(a, t)
+				a = append(a, NewAST2("=", t.NdFirst, t.NdSecond))
 			}
 			if p.token.NdId != "," {
 				break
@@ -506,15 +634,11 @@ func (p *Parser) initializeSymbolTable() {
 		} else if len(a) == 1 {
 			return a[0]
 		} else {
-			return &Token{
-				NdId:    "let",
-				NdArity: listArity,
-				NdList:  a,
-			}
+			return &ASTimpl{op: "let", list: a}
 		}
 	})
 
-	p.stmt("if", func(this *Token) *Token {
+	p.stmt("if", func(this *Token) AST {
 		p.skip("(")
 		this.NdFirst = p.expression(0)
 		p.skip(")")
@@ -531,10 +655,10 @@ func (p *Parser) initializeSymbolTable() {
 			this.NdThird = nil
 		}
 		this.NdArity = statementArity
-		return this
+		return NewAST3("if", this.NdFirst, this.NdSecond, this.NdThird)
 	})
 
-	p.stmt("return", func(this *Token) *Token {
+	p.stmt("return", func(this *Token) AST {
 		if p.token.NdId != ";" {
 			this.NdFirst = p.expression(0)
 		}
@@ -543,24 +667,24 @@ func (p *Parser) initializeSymbolTable() {
 			p.token.Error("Unreachable statement.")
 		}
 		this.NdArity = statementArity
-		return this
+		return NewAST1("return", this.NdFirst)
 	})
 
-	p.stmt("break", func(this *Token) *Token {
+	p.stmt("break", func(this *Token) AST {
 		p.skip(";")
 		if p.token.NdId != "}" {
 			p.token.Error("Unreachable statement.")
 		}
 		this.NdArity = statementArity
-		return this
+		return NewAST0("break")
 	})
 
-	p.stmt("while", func(this *Token) *Token {
+	p.stmt("while", func(this *Token) AST {
 		p.skip("(")
 		this.NdFirst = p.expression(0)
 		p.skip(")")
 		this.NdSecond = p.block()
 		this.NdArity = statementArity
-		return this
+		return NewAST2("while", this.NdFirst, this.NdSecond)
 	})
 }
