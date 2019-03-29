@@ -1,7 +1,5 @@
 package scan
 
-import ()
-
 type Scope struct {
 	def    map[string]*Token
 	parent *Scope
@@ -17,10 +15,12 @@ func (s *Scope) define(n *Token) {
 	}
 	s.def[n.TkValue] = n
 	n.TkReserved = false
-	n.TkNud = itself
-	n.TkLed = nil
-	n.TkStd = nil
-	n.TkLbp = 0
+	n.parsel = &Parsel{
+		TkNud: itself,
+		TkLed: nil,
+		TkStd: nil,
+		TkLbp: 0,
+	}
 }
 
 func (s *Scope) find(name string) *Token {
@@ -35,14 +35,14 @@ func (s *Scope) find(name string) *Token {
 }
 
 func (s *Scope) reserve(n *Token) {
-	if n.NdArity != nameArity || n.TkReserved {
+	if n.TkType != Name || n.TkReserved {
 		return
 	}
 	if t, ok := s.def[n.TkValue]; ok {
 		if t.TkReserved {
 			return
 		}
-		if t.NdArity == nameArity {
+		if t.TkType == Name {
 			n.Error("Already defined")
 		}
 	}

@@ -8,8 +8,10 @@ import (
 
 type AST interface {
 	Error(message string)
+
 	String() string
 	PrettyPrint(b io.Writer, indent string)
+
 	IsFuncall() bool
 	IsAssignment() bool
 }

@@ -73,9 +73,6 @@ var tokenRegex = regexp.MustCompile(
 		"|"),
 )
 
-type UnaryDenotation func(this *Token) AST
-type BinaryDenotation func(this *Token, left AST) AST
-
 // Token represents a lexical unit returned from the scanner.
 type Token struct {
 	TkType     Type   // The type of this item.
@@ -84,21 +81,7 @@ type Token struct {
 	TkColumn   int    // The column number at which this token appears
 	TkReserved bool
 
-	TkNud UnaryDenotation
-	TkLed BinaryDenotation
-	TkStd UnaryDenotation
-	TkLbp int
-
-	NdId    string
-	NdArity Type /*Arity*/
-
-	NdAssignment bool
-	NdFirst      AST
-	NdSecond     AST
-	NdThird      AST
-	NdList       []AST
-	NdName       string
-	NdKey        string
+	parsel *Parsel
 }
 
 func (t *Token) Error(message string) {
@@ -106,51 +89,19 @@ func (t *Token) Error(message string) {
 }
 
 func (t *Token) IsAssignment() bool {
-	return t.NdId == "="
+	return t.TkType == Punctuator && t.TkValue == "="
 }
 func (t *Token) IsFuncall() bool {
-	return t.NdId == "("
+	return t.TkType == Punctuator && t.TkValue == "("
 }
 
 func (t *Token) PrettyPrint(b io.Writer, indent string) {
-	fmt.Fprintf(b, "%s%s(%s %q)@%d:%d",
-		indent, t.TkType, t.NdArity, t.TkValue, t.TkLine, t.TkColumn)
-	if t.NdId != "" { // '∅'
-		fmt.Fprintf(b, "[id %s]", t.NdId)
-	}
+	fmt.Fprintf(b, "%s%s(%q)@%d:%d", indent,
+		t.TkType, t.TkValue, t.TkLine, t.TkColumn)
 	if t.TkReserved {
 		fmt.Fprintf(b, " reserved")
 	}
-	if t.NdAssignment {
-		fmt.Fprintf(b, " assignment")
-	}
-	if t.NdName != "" {
-		fmt.Fprintf(b, " name:%q", t.NdName)
-	}
-	if t.NdKey != "" {
-		fmt.Fprintf(b, " key:%q", t.NdKey)
-	}
-	//	if t.NdList == nil || len(t.NdList) == 0 {
-	//		fmt.Fprintf(b, " NdList:empty")
-	//	}
 	fmt.Fprintf(b, "\n")
-	indented := indent + "  "
-	if t.NdFirst != nil {
-		t.NdFirst.PrettyPrint(b, indented)
-	}
-	if t.NdSecond != nil {
-		t.NdSecond.PrettyPrint(b, indented)
-	}
-	if t.NdThird != nil {
-		t.NdThird.PrettyPrint(b, indented)
-	}
-	if t.NdList != nil && len(t.NdList) > 0 {
-		fmt.Fprintf(b, "%slist:\n", indented)
-		indented += "  "
-		for _, item := range t.NdList {
-			item.PrettyPrint(b, indented)
-		}
-	}
 }
 
 func (t *Token) String() string {
