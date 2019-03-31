@@ -1,22 +1,34 @@
 package scan
 
+import "fmt"
+
 type Scope struct {
 	def    map[string]*Token
 	parent *Scope
 }
 
-func (s *Scope) define(n *Token) {
-	if t, ok := s.def[n.TkValue]; ok {
+func thisName(name *Token) AST {
+	if name.TkType != Name {
+		panic(fmt.Sprintf("expected a Name, got %#v", name))
+	}
+	return NewNameAST(name.TkValue)
+}
+
+func (s *Scope) define(name *Token) {
+	if name.TkType != Name {
+		panic(fmt.Sprintf("expected a Name, got %#v", name))
+	}
+	if t, ok := s.def[name.TkValue]; ok {
 		if t.TkReserved {
-			n.Error("Already reserved")
+			name.Error("Already reserved")
 		} else {
-			n.Error("Already defined")
+			name.Error("Already defined")
 		}
 	}
-	s.def[n.TkValue] = n
-	n.TkReserved = false
-	n.parsel = &Parsel{
-		TkNud: itself,
+	s.def[name.TkValue] = name
+	name.TkReserved = false
+	name.parsel = &Parsel{
+		TkNud: thisName,
 		TkLed: nil,
 		TkStd: nil,
 		TkLbp: 0,

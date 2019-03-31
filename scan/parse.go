@@ -37,10 +37,10 @@ func (p *Parser) newScope() {
 	p.scope = &Scope{def: map[string]*Token{}, parent: p.scope}
 }
 
-func (p *Parser) findInScope(name string) *Token {
-	if t := p.scope.find(name); t != nil {
+func (p *Parser) findInScope(identifier string) *Token {
+	if t := p.scope.find(identifier); t != nil {
 		return t
-	} else if tok, ok := p.parsels[name]; ok {
+	} else if tok, ok := p.parsels[identifier]; ok {
 		return tok
 	} else {
 		t := p.parsels["(name)"]
@@ -66,7 +66,7 @@ func (p *Parser) symbol(name string, bp int) *Token {
 				TkLbp: bp,
 				TkNud: func(this *Token) AST {
 					this.Error("Undefined")
-					return NewAST0(name)
+					return NewNameAST(name)
 				},
 				TkLed: func(this *Token, left AST) AST {
 					this.Error(fmt.Sprintf("Missing operator; left: %v", left))
@@ -84,7 +84,7 @@ func (p *Parser) constant(s string, v string) *Token {
 		//DEBUG fmt.Printf("constant %s: %v\n", v, this)
 		p.reserveInScope(this)
 		this.TkValue = p.parsels[this.TkValue].TkValue
-		return NewAST1(s, NewAST0(v))
+		return NewAST1(s, NewNameAST(v))
 	}
 	x.TkValue = v
 	return x
@@ -99,7 +99,7 @@ func (p *Parser) infix(id string, bp int, led BinaryDenotation) *Token {
 			//DEBUG fmt.Printf("infix after first: %v\n", this)
 			second := p.expression(bp)
 			//DEBUG fmt.Printf("infix after second: %v\n", this)
-			return NewAST2(id+" left associative", first, second)
+			return NewBinaryOperatorAST(id, first, second)
 		}
 	}
 	return s
@@ -114,7 +114,7 @@ func (p *Parser) infixr(id string, bp int, led BinaryDenotation) *Token {
 			//DEBUG fmt.Printf("infixr after first: %v\n", this)
 			second := p.expression(bp - 1)
 			//DEBUG fmt.Printf("infixr after second: %v\n", this)
-			return NewAST2(id+" right associative", first, second)
+			return NewRightAssocBinaryOperatorAST(id, first, second)
 		}
 	}
 	return s
@@ -126,16 +126,15 @@ func possibleLvalue(x *Token) bool {
 
 func (p *Parser) assignment(id string) *Token {
 	return p.infixr(id, 10, func(this *Token, left AST) AST {
-		//DEBUG fmt.Printf("assignment after NdFirst: %v\n", this)
-		//		if !possibleLvalue(left) {
-		//			left.Error("Bad lvalue.")
-		//		}
+		// if !possibleLvalue(left) {
+		// 	left.Error("Bad lvalue.")
+		// }
 		// TODO: re-instate the code above once Token/AST changeover is complete
 		first := left
 		second := p.expression(9)
 		//DEBUG fmt.Printf("assignment after second: %v\n", this)
 		return &ASTimpl{
-			op:           id,
+			kind:         id,
 			first:        first,
 			second:       second,
 			isAssignment: true,
@@ -255,7 +254,7 @@ func (p *Parser) statements() AST {
 	} else if len(a) == 1 {
 		return a[0]
 	} else {
-		return &ASTimpl{op: "statements", list: a}
+		return &ASTimpl{kind: "statements", list: a}
 		//return &Token{
 		//	NdId:    "statements",
 		//	NdArity: listArity,
@@ -270,9 +269,12 @@ func (p *Parser) block() AST {
 	return t.parsel.TkStd(t)
 }
 
-func itself(this *Token) AST {
-	//DEBUG fmt.Printf("itself: %v\n", this)
-	return &ASTimpl{token: this}
+func thisLiteral(literal *Token) AST {
+	//DEBUG fmt.Printf("thisLiteral: %v\n", literal)
+	if literal.TkType != Literal {
+		panic(fmt.Sprintf("expected literal, got %#v", literal))
+	}
+	return NewLiteralAST(literal.TkValue)
 }
 
 func (p *Parser) initializeSymbolTable() {
@@ -294,12 +296,12 @@ func (p *Parser) initializeSymbolTable() {
 	//p.constant("Object", {});
 	//p.constant("Array", []);
 
-	p.symbol("(literal)", -1).parsel.TkNud = itself
+	p.symbol("(literal)", -1).parsel.TkNud = thisLiteral
 
 	p.symbol("this", -1).parsel.TkNud = func(this *Token) AST {
 		//DEBUG fmt.Printf("this: %v\n", this)
 		p.reserveInScope(this)
-		return NewAST0("this")
+		return NewNameAST("this")
 	}
 
 	p.assignment("=")
@@ -335,7 +337,7 @@ func (p *Parser) initializeSymbolTable() {
 		if p.token.TkType != Name {
 			p.token.Error("Expected a property name.")
 		}
-		second := NewAST1("fieldname", NewAST0(p.token.TkValue))
+		second := NewAST1("fieldname", NewNameAST(p.token.TkValue))
 		p.advance()
 		return NewAST2(".", first, second)
 	})
@@ -375,7 +377,7 @@ func (p *Parser) initializeSymbolTable() {
 		}
 		p.skip(")")
 		return &ASTimpl{
-			op:        "funcall",
+			kind:      "funcall",
 			first:     first,
 			list:      list,
 			isFuncall: true,
@@ -411,7 +413,7 @@ func (p *Parser) initializeSymbolTable() {
 					p.token.Error("Expected a parameter name.")
 				}
 				p.scope.define(p.token)
-				formals = append(formals, NewAST0(p.token.TkValue))
+				formals = append(formals, NewNameAST(p.token.TkValue))
 				p.advance()
 				if p.token.TkValue != "," {
 					break
@@ -425,8 +427,8 @@ func (p *Parser) initializeSymbolTable() {
 		p.skip("}")
 		p.popScope()
 		return &ASTimpl{
-			op:     "defun",
-			first:  NewAST0(funcName),
+			kind:   "defun",
+			first:  NewNameAST(funcName),
 			second: second,
 			list:   formals,
 		}
@@ -444,7 +446,7 @@ func (p *Parser) initializeSymbolTable() {
 			}
 		}
 		p.skip("]")
-		return &ASTimpl{op: "[...]", list: arrayContents}
+		return &ASTimpl{kind: "[...]", list: arrayContents}
 	})
 
 	//p.prefix("{", func(this *Token) AST {
@@ -494,7 +496,7 @@ func (p *Parser) initializeSymbolTable() {
 			p.advance()
 			if p.token.TkValue == "=" {
 				p.skip("=")
-				first := NewAST0(n.TkValue)
+				first := NewNameAST(n.TkValue)
 				second := p.expression(0)
 				a = append(a, NewAST2("=", first, second))
 			}
@@ -509,7 +511,7 @@ func (p *Parser) initializeSymbolTable() {
 		} else if len(a) == 1 {
 			return a[0]
 		} else {
-			return &ASTimpl{op: "let", list: a}
+			return &ASTimpl{kind: "let", list: a}
 		}
 	})
 

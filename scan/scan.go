@@ -91,8 +91,16 @@ func (t *Token) Error(message string) {
 func (t *Token) IsAssignment() bool {
 	return t.TkType == Punctuator && t.TkValue == "="
 }
+
 func (t *Token) IsFuncall() bool {
 	return t.TkType == Punctuator && t.TkValue == "("
+}
+
+func (t *Token) GetLiteral() (value string, ok bool) {
+	if t.TkType == Literal {
+		return t.TkValue, true
+	}
+	return "", false
 }
 
 func (t *Token) PrettyPrint(b io.Writer, indent string) {
