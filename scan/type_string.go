@@ -4,6 +4,30 @@ package scan
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[Unknown-0]
+	_ = x[Error-1]
+	_ = x[Name-2]
+	_ = x[Punctuator-3]
+	_ = x[Fixnum-4]
+	_ = x[Flonum-5]
+	_ = x[String-6]
+	_ = x[UnterminatedString-7]
+	_ = x[Literal-8]
+	_ = x[nameArity-9]
+	_ = x[literalArity-10]
+	_ = x[thisArity-11]
+	_ = x[functionArity-12]
+	_ = x[unaryArity-13]
+	_ = x[binaryArity-14]
+	_ = x[ternaryArity-15]
+	_ = x[statementArity-16]
+	_ = x[listArity-17]
+}
+
 const _Type_name = "UnknownErrorNamePunctuatorFixnumFlonumStringUnterminatedStringLiteralnameArityliteralAritythisArityfunctionArityunaryAritybinaryArityternaryAritystatementAritylistArity"
 
 var _Type_index = [...]uint8{0, 7, 12, 16, 26, 32, 38, 44, 62, 69, 78, 90, 99, 112, 122, 133, 145, 159, 168}

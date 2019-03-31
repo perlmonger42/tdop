@@ -19,15 +19,12 @@ type AST interface {
 
 	IsAssignment() bool
 	IsFuncall() bool
-	//GetKind() string
 	GetLiteral() (value string, ok bool)
-	GetKind() (value string, ok bool)
 	GetName() (value string, ok bool)
 	GetOp() (op string, ok bool)
 }
 
 type ASTimpl struct {
-	token        *Token
 	kind         string
 	value        string // only used when kind == "(literal")
 	name         string // only used when kind == "(name)"
@@ -42,13 +39,6 @@ type ASTimpl struct {
 
 func (t *ASTimpl) Error(message string) {
 	panic(fmt.Sprintf("SyntaxError;  %s while processing %v", message, t))
-}
-
-func NewTokenAST(t *Token) AST {
-	return &ASTimpl{token: t,
-		isAssignment: t.IsAssignment(),
-		isFuncall:    t.IsFuncall(),
-	}
 }
 
 func (t *ASTimpl) First() AST  { return t.first }
@@ -88,29 +78,16 @@ func NewAST3(kind string, p, q, r AST) AST {
 }
 
 func (t *ASTimpl) IsAssignment() bool {
-	return t.isAssignment || t.token != nil && t.IsAssignment() ||
-		t.kind == "="
+	return t.isAssignment || t.kind == "="
 }
 
 func (t *ASTimpl) IsFuncall() bool {
-	return t.isFuncall || t.token != nil && t.IsFuncall()
+	return t.isFuncall
 }
 
 func (t *ASTimpl) GetLiteral() (value string, ok bool) {
-	if t.token != nil {
-		value, ok = t.token.GetLiteral()
-		return
-	}
 	if t.kind == "(literal)" {
 		return t.value, true
-	}
-	return "", false
-}
-
-func (t *ASTimpl) GetKind() (value string, ok bool) {
-	if t.token != nil {
-		value, ok = t.GetOp()
-		return
 	}
 	return "", false
 }
@@ -130,11 +107,6 @@ func (t *ASTimpl) GetOp() (op string, ok bool) {
 }
 
 func (t *ASTimpl) PrettyPrint(b io.Writer, indent string) {
-	if t.token != nil {
-		t.token.PrettyPrint(b, indent)
-		return
-	}
-
 	assignment := ""
 	if t.isAssignment {
 		assignment = " assignment"

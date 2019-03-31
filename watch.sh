@@ -7,7 +7,10 @@ while true; do
     echo Reformatting...
     find . -name '*.go' -newer ./tdop -print -exec go fmt '{}' \;
     echo Rebuilding...
-    go fmt ./... && go generate ./... && go build && go test ./... . && ./tdop
+    go fmt ./... && go generate ./... \
+      && go build && echo Build succeeded \
+      && go test ./... && echo Tests passed \
+      && echo && echo && echo && ./tdop
     touch ./tdop
   fi
 done
