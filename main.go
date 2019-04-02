@@ -8,7 +8,7 @@ import (
 	"github.com/perlmonger42/tdop/scan"
 )
 
-func parseString(source string) scan.AST {
+func parseString(source string) []scan.AST {
 	parser := scan.NewParser()
 	tokens := scan.TokenizeString(source)
 	return parser.Parse(tokens)
@@ -16,8 +16,10 @@ func parseString(source string) scan.AST {
 
 func TestAssignment() {
 	source := "let answer; answer = 42;"
-	tree := parseString(source)
-	fmt.Printf("Assignment:\n%v\n", tree)
+	stmts := parseString(source)
+	for _, stmt := range stmts {
+		fmt.Printf("statment:\n%v\n", stmt)
+	}
 }
 
 func writer() *tabwriter.Writer {

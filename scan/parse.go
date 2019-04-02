@@ -17,7 +17,7 @@ func NewParser() (p *Parser) {
 	return
 }
 
-func (p *Parser) Parse(array_of_tokens []*Token) AST {
+func (p *Parser) Parse(array_of_tokens []*Token) []AST {
 	p.tokens = array_of_tokens
 	p.tokenNumber = 0
 	p.newScope()
@@ -133,12 +133,7 @@ func (p *Parser) assignment(id string) *Token {
 		first := left
 		second := p.expression(9)
 		//DEBUG fmt.Printf("assignment after second: %v\n", this)
-		return &ASTimpl{
-			kind:         id,
-			first:        first,
-			second:       second,
-			isAssignment: true,
-		}
+		return NewAssignmentAST(first, second)
 	})
 }
 
@@ -230,37 +225,25 @@ func (p *Parser) statement() AST {
 		return n.parsel.TkStd(n)
 	}
 	v := p.expression(0)
-	if !v.IsAssignment() && v.IsFuncall() {
-		v.Error(fmt.Sprintf("Bad expression statement (toplevel is %v).", v))
+	if !v.IsPossibleStatementExpression() {
+		v.Error(fmt.Sprintf("Bad expression statement (toplevel is %#v).", v))
 	}
 	p.skip(";")
 	return v
 }
 
-func (p *Parser) statements() AST {
+func (p *Parser) statements() []AST {
 	a := []AST{}
-	var s AST
 	for {
 		if p.token.TkValue == "}" || p.token.TkValue == "(end)" { // '⌘' for "(end)"?
 			break
 		}
-		s = p.statement()
+		s := p.statement()
 		if s != nil {
 			a = append(a, s)
 		}
 	}
-	if len(a) == 0 {
-		return nil
-	} else if len(a) == 1 {
-		return a[0]
-	} else {
-		return &ASTimpl{kind: "statements", list: a}
-		//return &Token{
-		//	NdId:    "statements",
-		//	NdArity: listArity,
-		//	NdList:  a,
-		//}
-	}
+	return a
 }
 
 func (p *Parser) block() AST {
@@ -333,13 +316,13 @@ func (p *Parser) initializeSymbolTable() {
 	p.infix("/", 60, nil)
 
 	p.infix(".", 80, func(this *Token, left AST) AST {
-		first := left
-		if p.token.TkType != Name {
+		lhs := left
+		field := p.token
+		if field.TkType != Name {
 			p.token.Error("Expected a property name.")
 		}
-		second := NewAST1("fieldname", NewNameAST(p.token.TkValue))
 		p.advance()
-		return NewAST2(".", first, second)
+		return NewFieldAccessAST(lhs, field.TkValue)
 	})
 
 	p.infix("[", 80, func(this *Token, left AST) AST {
@@ -356,7 +339,7 @@ func (p *Parser) initializeSymbolTable() {
 		//	this.NdSecond = left.second
 		//} else {
 		//  this.NdArity = binaryArity
-		first := left
+		callee := left
 		//  this.NdFirst = first
 		//if (left.NdArity != unaryArity || left.TkValue != "function") && //  'ƒ' for "function"?
 		//	left.NdArity != nameArity && left.TkValue != "(" &&
@@ -365,10 +348,10 @@ func (p *Parser) initializeSymbolTable() {
 		//	left.Error("Expected a variable name.")
 		//} TODO: re-instate this check
 		//} TODO: re-instate this binary/ternary distinction
-		list := []AST{}
+		actuals := []AST{}
 		if p.token.TkValue != ")" {
 			for {
-				list = append(list, p.expression(0))
+				actuals = append(actuals, p.expression(0))
 				if p.token.TkValue != "," {
 					break
 				}
@@ -376,12 +359,7 @@ func (p *Parser) initializeSymbolTable() {
 			}
 		}
 		p.skip(")")
-		return &ASTimpl{
-			kind:      "funcall",
-			first:     first,
-			list:      list,
-			isFuncall: true,
-		}
+		return NewFuncallAST(callee, actuals)
 	})
 
 	p.prefix("!", nil)
@@ -396,16 +374,15 @@ func (p *Parser) initializeSymbolTable() {
 
 	p.prefix("function", func(this *Token) AST {
 		// fmt.Printf("consumed `function`; current token is %v\n", p.token)
-		formals := []AST{}
+		formals := []string{}
 		p.newScope()
 		var funcName string
 		if p.token.TkType == Name {
 			p.scope.define(p.token)
 			funcName = p.token.TkValue
-			// fmt.Printf("after `function`, consumed name %v\n", p.token)
 			p.advance()
+		} else {
 		}
-		// fmt.Printf("after `function [name]`, looking for `('; current token is  %v\n", p.token)
 		p.skip("(")
 		if p.token.TkValue != ")" {
 			for {
@@ -413,7 +390,7 @@ func (p *Parser) initializeSymbolTable() {
 					p.token.Error("Expected a parameter name.")
 				}
 				p.scope.define(p.token)
-				formals = append(formals, NewNameAST(p.token.TkValue))
+				formals = append(formals, p.token.TkValue)
 				p.advance()
 				if p.token.TkValue != "," {
 					break
@@ -423,15 +400,10 @@ func (p *Parser) initializeSymbolTable() {
 		}
 		p.skip(")")
 		p.skip("{")
-		second := p.statements()
+		body := p.statements()
 		p.skip("}")
 		p.popScope()
-		return &ASTimpl{
-			kind:   "defun",
-			first:  NewNameAST(funcName),
-			second: second,
-			list:   formals,
-		}
+		return NewFundefAST(funcName, formals, body)
 	})
 
 	p.prefix("[", func(this *Token) AST {
@@ -481,7 +453,7 @@ func (p *Parser) initializeSymbolTable() {
 		a := p.statements()
 		p.skip("}")
 		p.popScope()
-		return a
+		return NewBlockAST(a)
 	})
 
 	p.stmt("let", func(this *Token) AST {
@@ -498,7 +470,8 @@ func (p *Parser) initializeSymbolTable() {
 				p.skip("=")
 				first := NewNameAST(n.TkValue)
 				second := p.expression(0)
-				a = append(a, NewAST2("=", first, second))
+				a = append(a, NewAssignmentAST(first, second))
+			} else {
 			}
 			if p.token.TkValue != "," {
 				break
@@ -517,32 +490,32 @@ func (p *Parser) initializeSymbolTable() {
 
 	p.stmt("if", func(this *Token) AST {
 		p.skip("(")
-		first := p.expression(0)
+		test := p.expression(0)
 		p.skip(")")
-		second := p.block()
-		var third AST
+		ifBranch := p.block()
+		var elseBranch AST
 		if p.token.TkValue == "else" { //  '𝕖' for "else"?
 			p.reserveInScope(p.token)
 			p.skip("else")
 			if p.token.TkValue == "if" { // '𝕚' for "if"?
-				third = p.statement()
+				elseBranch = p.statement()
 			} else {
-				third = p.block()
+				elseBranch = p.block()
 			}
 		}
-		return NewAST3("if", first, second, third)
+		return NewIfAST(test, ifBranch, elseBranch)
 	})
 
 	p.stmt("return", func(this *Token) AST {
-		var first AST
-		if p.token.TkValue != ";" {
-			first = p.expression(0)
+		var value AST
+		if p.token.TkValue != ";" && p.token.TkValue != "}" {
+			value = p.expression(0)
 		}
 		p.skip(";")
 		if p.token.TkValue != "}" {
 			p.token.Error("Unreachable statement.")
 		}
-		return NewAST1("return", first)
+		return NewReturnAST(value)
 	})
 
 	p.stmt("break", func(this *Token) AST {

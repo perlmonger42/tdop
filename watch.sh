@@ -8,8 +8,8 @@ while true; do
     find . -name '*.go' -newer ./tdop -print -exec go fmt '{}' \;
     echo Rebuilding...
     go fmt ./... && go generate ./... \
-      && go build && echo Build succeeded \
-      && go test ./... && echo Tests passed \
+      && (go build && echo Build succeeded || echo BUILD FAILURE) \
+      && (go test ./... && echo Tests passed || echo TESTS FAILED) \
       && echo && echo && echo && ./tdop
     touch ./tdop
   fi
