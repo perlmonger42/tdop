@@ -10,6 +10,9 @@ will be a fairly direct transliteration of Crockford's JavaScript.
 From there I hope to grow it into a real Go program that can be used as a base
 for further research.
 
+Note (added 2021-04-16): There's a branch named `simple-ast` that probably ought to be merged into `master`. I think it was driven by a desire for a better separation between tokens and AST nodes. But that work was done in December 2020, and I'm not wanting to spend the time now to reconstruct my thoughts at that time. Especially on a project I'm abandoning. But I did want to get the work committed, so I did push `simple-ast` to github. Bottom line: if ever I revisit this repo, consider merging `simple-ast` into `master`.
+
+Note (added 2021-04-16): This project was superceded by `tdop-simple`, which was later renamed `go-tdop`.
 
 Go Version
 ========================================================================
